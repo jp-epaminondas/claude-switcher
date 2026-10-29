@@ -1,88 +1,12 @@
 'use strict';
 
-// Runs the core against a throwaway Claude config dir and a fake API: no real tokens or
-// network. `npm test`
+// Saving, switching and refreshing accounts against a fake Claude config dir.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { Store } = require('../src/store');
-const { Switcher } = require('../src/switcher');
-const { ApiError } = require('../src/api');
-const { outStatus } = require('../src/usage');
-
-const HOUR = 3600 * 1000;
-
-function fakeApi() {
-  const dead = new Set();
-  const usage = {};
-  const calls = { refresh: [], profile: 0, usage: [] };
-  const acct = (token) => token.split('-')[1];
-  return {
-    calls,
-    usage,
-    dead,
-    async getProfile(at) {
-      calls.profile++;
-      const a = acct(at);
-      return { accountUuid: `uuid-${a}`, email: `${a.toLowerCase()}@x.com`, oauthAccount: { accountUuid: `uuid-${a}`, emailAddress: `${a.toLowerCase()}@x.com` } };
-    },
-    async getUsage(at) {
-      calls.usage.push(acct(at));
-      return usage[acct(at)] || { five_hour: { utilization: 0, resets_at: null }, seven_day: { utilization: 0, resets_at: null } };
-    },
-    async refreshOAuth(oauth) {
-      calls.refresh.push(acct(oauth.refreshToken));
-      if (dead.has(oauth.refreshToken)) throw new ApiError('HTTP 400: invalid_grant', 400, { error: 'invalid_grant' });
-      dead.add(oauth.refreshToken); // rotation: an old refresh token never works twice
-      const [, a, n] = oauth.refreshToken.split('-');
-      const m = Number(n) + 1;
-      return { ...oauth, accessToken: `at-${a}-${m}`, refreshToken: `rt-${a}-${m}`, expiresAt: Date.now() + 8 * HOUR };
-    },
-  };
-}
-
-const oauth = (a, n, expiresIn = 8 * HOUR) => ({
-  accessToken: `at-${a}-${n}`,
-  refreshToken: `rt-${a}-${n}`,
-  expiresAt: Date.now() + expiresIn,
-  scopes: ['user:inference'],
-  subscriptionType: 'pro',
-});
-
-function setup() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-switcher-test-'));
-  const paths = {
-    configDir: path.join(root, '.claude'),
-    credentials: path.join(root, '.claude', '.credentials.json'),
-    globalConfig: path.join(root, '.claude.json'),
-  };
-  fs.mkdirSync(paths.configDir);
-  const dir = path.join(root, '.claude-switcher');
-  const api = fakeApi();
-  const store = new Store(dir);
-  const sw = new Switcher({ paths, store, switcherDir: dir, api });
-  const env = {
-    root,
-    paths,
-    api,
-    store,
-    sw,
-    // What Claude Code does on /login or on a token refresh.
-    login(a, n, expiresIn) {
-      const creds = { claudeAiOauth: oauth(a, n, expiresIn), mcpOAuth: { keep: 'me' } };
-      fs.writeFileSync(paths.credentials, JSON.stringify(creds));
-      const gc = fs.existsSync(paths.globalConfig) ? JSON.parse(fs.readFileSync(paths.globalConfig, 'utf8')) : { projects: { 'c:/x': 1, 'C:/x': 2 } };
-      gc.oauthAccount = { accountUuid: `uuid-${a}`, emailAddress: `${a.toLowerCase()}@x.com`, extra: 'from-claude-code' };
-      fs.writeFileSync(paths.globalConfig, JSON.stringify(gc, null, 2));
-    },
-    live: () => JSON.parse(fs.readFileSync(paths.credentials, 'utf8')),
-    gc: () => JSON.parse(fs.readFileSync(paths.globalConfig, 'utf8')),
-    acc: (a) => store.load().accounts.find((x) => x.id === `uuid-${a}`),
-  };
-  return env;
-}
+const { soonestBack } = require('../src/core/advisor');
+const { HOUR, oauth, setup } = require('./helpers');
 
 test('first run saves the logged-in account, a new login adds another', async () => {
   const t = setup();
@@ -207,7 +131,7 @@ test('out and back events, next account choice', async () => {
   assert.deepEqual(await t.sw.collectEvents(), [], 'each event is reported once');
 
   assert.equal(t.sw.pickNext(t.store.load()).id, 'uuid-D', 'lowest usage among available');
-  assert.equal(t.sw.soonestBack(t.store.load()).account.id, 'uuid-A');
+  assert.equal(soonestBack(t.store.load()).account.id, 'uuid-A');
 
   // The 5h window resets: both come back without a new fetch.
   await t.sw.store.update((d) => {
@@ -215,106 +139,6 @@ test('out and back events, next account choice', async () => {
   });
   const back = await t.sw.collectEvents();
   assert.deepEqual(back.map((e) => `${e.type}:${e.id}`).sort(), ['back:uuid-A', 'back:uuid-B']);
-});
-
-test('limit info from the usage API', () => {
-  const now = Date.now();
-  const fetchedAt = now;
-  const weekly = new Date(now + 50 * HOUR).toISOString();
-  const st = outStatus(
-    {
-      fetchedAt,
-      fiveHour: { pct: 30, resetsAt: now + HOUR },
-      sevenDay: { pct: 100, resetsAt: Date.parse(weekly) },
-      limits: [],
-    },
-    now,
-  );
-  assert.deepEqual(st, { out: true, until: Date.parse(weekly) });
-  assert.deepEqual(outStatus({ fetchedAt, fiveHour: { pct: 100, resetsAt: now - 1 }, limits: [] }, now), { out: false });
-});
-
-// Usage in the shape advise() reads. pct values are % used; resets in hours from now.
-function acct(id, { five = 0, week = 0, weekIn = null, fiveIn = null, active = false } = {}, now) {
-  return {
-    id,
-    label: id,
-    credentials: oauth(id, 1),
-    usage: {
-      fetchedAt: now,
-      fiveHour: { pct: five, resetsAt: fiveIn == null ? null : now + fiveIn * HOUR },
-      sevenDay: { pct: week, resetsAt: weekIn == null ? null : now + weekIn * HOUR },
-      limits: [],
-    },
-    active,
-  };
-}
-const dataOf = (now, ...accs) => ({ accounts: accs, activeId: (accs.find((a) => a.active) || {}).id || null, ignored: [] });
-
-test('advisor: earliest weekly reset first, burn flag, sticky active', () => {
-  const { advise } = require('../src/advisor');
-  const now = Date.now();
-  // The real situation from the screenshot: 5 in use renews in 15h with 63% left.
-  const data = dataOf(
-    now,
-    acct('C1', { five: 52, week: 34, weekIn: 78, fiveIn: 4 }, now),
-    acct('C2', { week: 67, weekIn: 65 }, now),
-    acct('C3', { five: 100, week: 75, weekIn: 19, fiveIn: 1.4 }, now),
-    acct('C4', { week: 100, weekIn: 18 }, now),
-    acct('C5', { week: 37, weekIn: 15, active: true }, now),
-  );
-  let r = advise(data, now);
-  assert.equal(r.best.id, 'C5', 'keep burning the one that renews first');
-  assert.ok(r.best.burn);
-  assert.equal(r.next.id, 'C2', 'C3/C4 are out; C2 renews before C1');
-  assert.equal(r.byId.get('C1').burn, false);
-
-  // Using C1 instead: the advisor points back to C5 and flags it.
-  data.activeId = 'C1';
-  r = advise(data, now);
-  assert.equal(r.best.id, 'C5');
-  assert.equal(r.best.active, false);
-
-  // Active renews only 2h after the earliest: not worth a switch.
-  const sticky = dataOf(now, acct('A', { week: 50, weekIn: 40, active: true }, now), acct('B', { week: 50, weekIn: 38 }, now));
-  assert.equal(advise(sticky, now).best.id, 'A');
-  assert.equal(advise(sticky, now).next.id, 'B');
-
-  // Nearly empty accounts go last; unstarted weeks after anything that can expire.
-  const order = dataOf(
-    now,
-    acct('fresh', {}, now),
-    acct('empty', { week: 97, weekIn: 2 }, now),
-    acct('later', { week: 10, weekIn: 100 }, now),
-  );
-  assert.equal(advise(order, now).best.id, 'later');
-  assert.deepEqual(
-    advise(order, now).items.filter((x) => x.available).map((x) => x.id),
-    ['fresh', 'empty', 'later'],
-    'items keep store order',
-  );
-});
-
-test('advisor: learns the cost of a 5h session and flags burn early when needed', () => {
-  const { advise, learnSessionCost } = require('../src/advisor');
-  const now = Date.now();
-  const u = (five, week) => ({ fiveHour: { pct: five, resetsAt: now + 3 * HOUR }, sevenDay: { pct: week, resetsAt: now + 50 * HOUR } });
-  const a = acct('A', { week: 20, weekIn: 50 }, now);
-  learnSessionCost(a, u(0, 10), u(30, 14));
-  learnSessionCost(a, u(30, 14), u(80, 20));
-  assert.deepEqual(a.calib, { five: 80, week: 10 });
-  learnSessionCost(a, u(80, 20), { ...u(5, 20), fiveHour: { pct: 5, resetsAt: now + 9 * HOUR } }); // new 5h window: ignored
-  assert.deepEqual(a.calib, { five: 80, week: 10 });
-
-  // 12.5% of the week per session: 80% left = 6.4 sessions = 32h of use; the week renews in
-  // 50h, so even at half-time use it would not all get spent.
-  a.usage.sevenDay.pct = 20;
-  const r = advise(dataOf(now, a), now);
-  assert.ok(Math.abs(r.best.sessions - 6.4) < 0.01);
-  assert.ok(r.best.burn);
-  // Without the learned cost, 50h is outside the 24h window.
-  delete a.calib;
-  assert.equal(advise(dataOf(now, a), now).best.burn, false);
 });
 
 test('burn event fires once when the best account is not the one in use', async () => {

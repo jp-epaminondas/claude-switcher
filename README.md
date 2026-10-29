@@ -85,10 +85,32 @@ Diagnóstico: painel **Output → Claude Switcher**.
 
 ## Desenvolvimento
 
+```
+src/
+  extension.js       ponto de entrada: monta as peças, registra os comandos, loop de atualização
+  core/              lógica sem dependência do VS Code (coberta pelos testes)
+    switcher.js      salvar, identificar e trocar contas; consultar uso
+    advisor.js       qual conta usar (⭐/🔥) e aprendizado do custo de uma sessão
+    usage.js         leitura do /api/oauth/usage e formatação de horários
+    api.js           chamadas à API (perfil, uso, renovação de token)
+    claudeFiles.js   leitura e escrita dos arquivos do Claude Code
+    store.js         accounts.json compartilhado entre janelas
+    fsutil.js        escrita atômica e lock
+    paths.js         onde ficam os arquivos
+  ui/                tudo que aparece no VS Code
+    accountsView.js  painel da barra lateral
+    statusBar.js     indicador na barra de status
+    menu.js          menu rápido
+    actions.js       trocar, adicionar, renomear, remover e as notificações
+    present.js       textos de cada conta, compartilhados pelas telas
+test/                testes do core (pasta temporária + API falsa, sem rede)
+media/               ícone da barra lateral
+```
+
 ```sh
-npm test          # testes do núcleo (pasta temporária + API falsa, sem rede)
-npm run package   # gera o .vsix
-code --install-extension claude-switcher-0.2.1.vsix
+npm test          # roda os testes
+npm run package   # gera dist/claude-switcher-<versão>.vsix
+code --install-extension dist/claude-switcher-0.2.1.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

@@ -11,10 +11,10 @@
   "categories": [
     "Other"
   ],
-  "main": "./extension.js",
+  "main": "./src/extension.js",
   "scripts": {
-    "test": "node --test test/switcher.test.js",
-    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+    "test": "node --test \"test/*.test.js\"",
+    "package": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && npx --yes @vscode/vsce package --allow-missing-repository --out dist/"
   },
   "activationEvents": [
     "onStartupFinished"

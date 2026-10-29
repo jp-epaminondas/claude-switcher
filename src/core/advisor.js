@@ -109,6 +109,16 @@ function advise(data, now = Date.now(), { burnWindowHours = 24, minBurnPct = 10 
   };
 }
 
+// The out account that comes back first, with its time.
+function soonestBack(data, now = Date.now()) {
+  let first = null;
+  for (const a of data.accounts) {
+    const st = outStatus(a.usage, now);
+    if (st.out && st.until && (!first || st.until < first.until)) first = { account: a, until: st.until };
+  }
+  return first;
+}
+
 function fmtSessions(s) {
   if (s < 1) return 'menos de 1 sessão de 5h';
   const r = Math.round(s);
@@ -129,4 +139,4 @@ function reasonLines(x, now = Date.now()) {
 
 const reason = (x, now = Date.now()) => reasonLines(x, now).join(', ');
 
-module.exports = { advise, reason, reasonLines, learnSessionCost, fmtSessions };
+module.exports = { advise, reason, reasonLines, soonestBack, learnSessionCost, fmtSessions };

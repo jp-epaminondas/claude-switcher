@@ -278,16 +278,6 @@ class Switcher {
     return next ? next.acc : null;
   }
 
-  // The out account that comes back first, with its time.
-  soonestBack(data, now = Date.now()) {
-    let best = null;
-    for (const a of data.accounts) {
-      const st = outStatus(a.usage, now);
-      if (st.out && st.until && (!best || st.until < best.until)) best = { account: a, until: st.until };
-    }
-    return best;
-  }
-
   async rename(id, label) {
     return this.store.update((data) => {
       const acc = find(data, id);

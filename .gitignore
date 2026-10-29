@@ -1,4 +1,5 @@
 # Build
+dist/
 *.vsix
 node_modules/
 
