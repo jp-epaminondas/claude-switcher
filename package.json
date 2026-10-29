@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -171,6 +171,17 @@
           "type": "boolean",
           "default": true,
           "description": "Avisar quando uma conta esgotada voltar a ficar disponível."
+        },
+        "claudeSwitcher.burnWindowHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "description": "Marca a conta com 🔥 (e avisa) quando faltam até estas horas para a semana dela renovar e ainda sobra uso. Também marca antes disso quando sobra mais do que dá para gastar até a renovação."
+        },
+        "claudeSwitcher.notifyBurn": {
+          "type": "boolean",
+          "default": true,
+          "description": "Avisar quando a conta recomendada não é a que está em uso e tem uso prestes a vencer."
         },
         "claudeSwitcher.showStatusBar": {
           "type": "boolean",

@@ -8,6 +8,7 @@ const { Store } = require('./src/store');
 const { Switcher } = require('./src/switcher');
 const { mtime } = require('./src/fsutil');
 const { outStatus, effectivePct, fmtClock, fmtIn, fmtPct } = require('./src/usage');
+const { advise, reason, fmtSessions } = require('./src/advisor');
 
 const MINUTE = 60 * 1000;
 
@@ -27,6 +28,8 @@ let lastConfigMtime = -1;
 let lastSyncAt = 0;
 
 const config = () => vscode.workspace.getConfiguration('claudeSwitcher');
+const adviceOptions = () => ({ burnWindowHours: Math.max(1, Number(config().get('burnWindowHours')) || 24) });
+const adviceFor = (data, now) => advise(data, now, adviceOptions());
 const log = (msg) => output && output.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
 
 function activate(context) {
@@ -102,7 +105,7 @@ async function tick({ force = false } = {}) {
     }
     const activeEveryMs = Math.max(1, Number(config().get('pollIntervalMinutes')) || 3) * MINUTE;
     await sw.refreshUsage({ force, activeEveryMs });
-    for (const ev of await sw.collectEvents()) onEvent(ev);
+    for (const ev of await sw.collectEvents(adviceOptions())) onEvent(ev);
   } catch (e) {
     lastCredMtime = -1; // retry the sync on the next tick
     log(`erro: ${e.stack || e.message}`);
@@ -123,6 +126,12 @@ function onEvent(ev) {
   if (!acc) return;
   if (ev.type === 'out' && ev.active) {
     onActiveOut(data, acc, ev.until);
+  } else if (ev.type === 'burn' && config().get('notifyBurn', true)) {
+    const x = adviceFor(data, Date.now()).byId.get(acc.id);
+    if (!x || !x.burn) return;
+    vscode.window
+      .showInformationMessage(`🔥 Use a ${acc.label} agora: ${reason(x)}.`, `Usar ${acc.label}`)
+      .then((choice) => choice && doSwitch(acc.id));
   } else if (ev.type === 'back' && config().get('notifyWhenBack', true)) {
     if (ev.active) {
       vscode.window.showInformationMessage(`✅ ${acc.label} voltou: o limite zerou.`);
@@ -352,33 +361,53 @@ class AccountsTree {
       return [new vscode.TreeItem(e.message)];
     }
     const now = Date.now();
-    return data.accounts.map((a) => accountTreeItem(a, data, now));
+    const advice = adviceFor(data, now);
+    return data.accounts.map((a) => accountTreeItem(a, data, advice, now));
   }
 }
 
-function accountTreeItem(a, data, now) {
+function accountTreeItem(a, data, advice, now) {
   const s = accountState(a, data, now);
   const u = usageOf(a, now);
+  const x = advice.byId.get(a.id);
+  const isBest = advice.best && advice.best.id === a.id;
   const item = new vscode.TreeItem(a.label, vscode.TreeItemCollapsibleState.None);
   item.id = a.id;
   item.accountId = a.id;
   item.iconPath = new vscode.ThemeIcon(s.icon, s.color ? new vscode.ThemeColor(s.color) : undefined);
-  if (a.needsLogin || s.out) item.description = s.situation;
-  else if (u) item.description = `${s.active ? 'em uso · ' : ''}5h ${fmtPct(u.five)} · semana ${fmtPct(u.week)}`;
-  else item.description = s.situation;
+  let text;
+  if (a.needsLogin || s.out || !u) text = s.situation;
+  else if (x.burn) text = `🔥 sobram ${Math.round(x.left)}% · renova ${fmtIn(x.resetsAt, now)}`;
+  else text = `5h ${fmtPct(u.five)} · semana ${fmtPct(u.week)}${u.weekResets ? ` · renova ${fmtClock(u.weekResets, now)}` : ''}`;
+  item.description = `${isBest ? '⭐ ' : ''}${s.active && !s.out && !a.needsLogin ? 'em uso · ' : ''}${text}`;
   item.contextValue = s.active ? 'account.active' : 'account';
   if (!s.active) item.command = { command: 'claudeSwitcher.useAccount', title: 'Usar esta conta', arguments: [a.id] };
 
   const md = new vscode.MarkdownString('', true);
   md.appendMarkdown(`**${escapeMd(a.label)}** · ${escapeMd(a.email || '')}\n\n$(${s.icon}) ${s.situation}\n\n`);
+  if (isBest) md.appendMarkdown(`⭐ **Recomendada:** ${reason(x, now)}.\n\n`);
+  else if (x.burn) md.appendMarkdown(`🔥 ${reason(x, now)}.\n\n`);
   if (u) {
     if (u.five != null) md.appendMarkdown(`- 5h: **${fmtPct(u.five)}**${u.fiveResets ? ` · zera ${fmtClock(u.fiveResets, now)}` : ''}\n`);
-    if (u.week != null) md.appendMarkdown(`- Semana: **${fmtPct(u.week)}**${u.weekResets ? ` · zera ${fmtClock(u.weekResets, now)}` : ''}\n`);
+    if (u.week != null) {
+      const sessions = x.sessions != null ? ` · sobram ≈ ${fmtSessions(x.sessions)}` : '';
+      md.appendMarkdown(`- Semana: **${fmtPct(u.week)}**${sessions}${u.weekResets ? ` · renova ${fmtClock(u.weekResets, now)}` : ''}\n`);
+    }
     md.appendMarkdown(`\nAtualizado ${fmtClock(u.fetchedAt, now)}`);
   }
   if (!s.active) md.appendMarkdown('\n\n_Clique para usar esta conta._');
   item.tooltip = md;
   return item;
+}
+
+// One-line answer to "which account should I use?", shown on top of the side bar list.
+function headline(data, advice, now) {
+  if (!data.accounts.length) return undefined;
+  const best = advice.best;
+  if (best) return `⭐ ${best.active ? 'Continue na' : 'Use a'} ${best.acc.label}: ${reason(best, now)}.`;
+  const soon = sw.soonestBack(data, now);
+  const when = soon ? ` A primeira a voltar é a ${soon.account.label}, ${fmtClock(soon.until, now)} (${fmtIn(soon.until, now)}).` : '';
+  return `Nenhuma conta disponível agora.${when}`;
 }
 
 function showMenu() {
@@ -398,14 +427,16 @@ function showMenu() {
       return;
     }
     const now = Date.now();
-    const next = sw.pickNext(data, now);
+    const advice = adviceFor(data, now);
+    const next = advice.next;
     const items = [
       ...data.accounts.map((a) => {
         const s = accountState(a, data, now);
+        const flag = advice.best && advice.best.id === a.id ? '⭐ recomendada  ·  ' : advice.byId.get(a.id).burn ? '🔥 vai perder uso  ·  ' : '';
         return {
           label: `$(${s.icon}) ${a.label}`,
           description: a.email,
-          detail: `${s.situation}  ·  ${usageSummary(a, now)}`,
+          detail: `${flag}${s.situation}  ·  ${usageSummary(a, now)}`,
           account: a,
           buttons: [
             { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Renomear', action: 'rename' },
@@ -416,7 +447,8 @@ function showMenu() {
       { label: 'Ações', kind: vscode.QuickPickItemKind.Separator },
       {
         label: '$(arrow-swap) Trocar para a próxima disponível',
-        description: next ? `→ ${next.label}` : 'nenhuma disponível agora',
+        description: next ? `→ ${next.acc.label}` : 'nenhuma disponível agora',
+        detail: next ? reason(next, now) : undefined,
         action: 'next',
       },
       { label: '$(add) Adicionar conta…', action: 'add' },
@@ -466,11 +498,13 @@ function render() {
     return;
   }
   const now = Date.now();
+  const advice = adviceFor(data, now);
   const active = data.accounts.find((a) => a.id === data.activeId);
   const outCount = data.accounts.filter((a) => outStatus(a.usage, now).out).length;
   const othersOut = outCount - (active && outStatus(active.usage, now).out ? 1 : 0);
 
   if (treeView) {
+    treeView.message = headline(data, advice, now);
     treeView.description = active ? active.label : '';
     treeView.badge = outCount ? { value: outCount, tooltip: `${outCount} ${outCount > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined;
   }
@@ -495,7 +529,7 @@ function render() {
   if (othersOut) text += ` · $(clock) ${othersOut} fora`;
   statusItem.text = text;
   statusItem.backgroundColor = bg ? new vscode.ThemeColor(bg) : undefined;
-  statusItem.tooltip = tooltip(data, now);
+  statusItem.tooltip = tooltip(data, advice, now);
   if (config().get('showStatusBar', true)) statusItem.show();
   else statusItem.hide();
   if (refreshMenu) refreshMenu();
@@ -503,17 +537,19 @@ function render() {
 
 const escapeMd = (s) => String(s).replace(/[|\\`*_[\]<>]/g, '\\$&');
 
-function tooltip(data, now) {
+function tooltip(data, advice, now) {
   const md = new vscode.MarkdownString('', true);
   if (!data.accounts.length) {
     md.appendMarkdown('Nenhuma conta salva ainda. Clique para adicionar.');
     return md;
   }
-  md.appendMarkdown('**Contas do Claude**\n\n| | Conta | 5h | Semana | Situação |\n|:-:|:--|--:|--:|:--|\n');
+  md.appendMarkdown(`${escapeMd(headline(data, advice, now))}\n\n`);
+  md.appendMarkdown('| | Conta | 5h | Semana | Situação |\n|:-:|:--|--:|--:|:--|\n');
   for (const a of data.accounts) {
     const s = accountState(a, data, now);
     const u = usageOf(a, now) || {};
-    md.appendMarkdown(`| $(${s.icon}) | ${escapeMd(a.label)} | ${fmtPct(u.five)} | ${fmtPct(u.week)} | ${s.situation} |\n`);
+    const flag = advice.best && advice.best.id === a.id ? '⭐ ' : advice.byId.get(a.id).burn ? '🔥 ' : '';
+    md.appendMarkdown(`| $(${s.icon}) | ${flag}${escapeMd(a.label)} | ${fmtPct(u.five)} | ${fmtPct(u.week)} | ${s.situation} |\n`);
   }
   md.appendMarkdown('\nClique para trocar de conta.');
   return md;

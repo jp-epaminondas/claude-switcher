@@ -2,7 +2,10 @@
 
 const defaultApi = require('./api');
 const files = require('./claudeFiles');
-const { normalizeUsage, outStatus, effectivePct } = require('./usage');
+const { normalizeUsage, outStatus } = require('./usage');
+const { advise, learnSessionCost } = require('./advisor');
+
+const HOUR = 3600 * 1000;
 
 const MINUTE = 60 * 1000;
 const isExpired = (oauth, marginMs = MINUTE) => !oauth || !oauth.expiresAt || oauth.expiresAt - Date.now() < marginMs;
@@ -223,7 +226,9 @@ class Switcher {
     return this.store.update((data) => {
       const acc = find(data, id);
       if (!acc || (acc.usage && acc.usage.fetchedAt >= fetchedAt)) return false;
-      acc.usage = normalizeUsage(raw, fetchedAt);
+      const usage = normalizeUsage(raw, fetchedAt);
+      learnSessionCost(acc, acc.usage, usage);
+      acc.usage = usage;
       acc.usageError = null;
       acc.usageErrorAt = null;
       return true;
@@ -238,9 +243,10 @@ class Switcher {
     return this.recordUsage(c.accountUuid, c.utilization, c.fetchedAtMs);
   }
 
-  // Accounts that ran out or came back since the last check. Runs under the store lock, so
-  // with several windows open only one of them reports each event.
-  async collectEvents() {
+  // Accounts that ran out or came back since the last check, plus a "burn" event when the
+  // recommended account is not the one in use and has usage about to be thrown away. Runs
+  // under the store lock, so with several windows open only one of them reports each event.
+  async collectEvents(adviceOptions = {}) {
     return this.store.update((data) => {
       const now = Date.now();
       const events = [];
@@ -254,25 +260,22 @@ class Switcher {
           events.push({ type: 'back', id: acc.id, active: acc.id === data.activeId });
         }
       }
+      const best = advise(data, now, adviceOptions).best;
+      if (best && best.burn && !best.active) {
+        const week = Math.round(best.resetsAt / HOUR); // once per account per weekly cycle
+        if (best.acc.burnNotified !== week) {
+          best.acc.burnNotified = week;
+          events.push({ type: 'burn', id: best.id });
+        }
+      }
       return events;
     });
   }
 
-  isAvailable(acc, now = Date.now()) {
-    return !!acc.credentials && !acc.needsLogin && !outStatus(acc.usage, now).out;
-  }
-
-  // Best account to move to: available, lowest 5h usage, then lowest weekly usage; ties go
-  // round-robin starting after the current one.
+  // Account to move to (never the one in use): see advise() for the ranking.
   pickNext(data, now = Date.now()) {
-    const n = data.accounts.length;
-    const cur = data.accounts.findIndex((a) => a.id === data.activeId);
-    const pct = (a, key) => effectivePct(a.usage && a.usage[key], now) || 0;
-    const candidates = data.accounts
-      .map((a, i) => ({ a, order: cur < 0 ? i : (i - cur + n) % n }))
-      .filter(({ a }) => a.id !== data.activeId && this.isAvailable(a, now));
-    candidates.sort((x, y) => pct(x.a, 'fiveHour') - pct(y.a, 'fiveHour') || pct(x.a, 'sevenDay') - pct(y.a, 'sevenDay') || x.order - y.order);
-    return candidates.length ? candidates[0].a : null;
+    const next = advise(data, now).next;
+    return next ? next.acc : null;
   }
 
   // The out account that comes back first, with its time.
