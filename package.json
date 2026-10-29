@@ -14,7 +14,7 @@
   "main": "./extension.js",
   "scripts": {
     "test": "node --test test/switcher.test.js",
-    "package": "npx --yes @vscode/vsce package --allow-missing-repository --skip-license"
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
   },
   "activationEvents": [
     "onStartupFinished"

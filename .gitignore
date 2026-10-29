@@ -1,0 +1,10 @@
+# Build
+*.vsix
+node_modules/
+
+# Saved logins live in ~/.claude-switcher, never here; this stops an accidental copy
+accounts.json
+accounts.lock/
+backup/
+.credentials.json
+.claude.json
