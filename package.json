@@ -1,0 +1,69 @@
+{
+  "name": "claude-switcher",
+  "displayName": "Claude Account Switcher",
+  "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "test": "node --test test/switcher.test.js",
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository --skip-license"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeSwitcher.menu",
+        "title": "Contas",
+        "category": "Claude Switcher",
+        "icon": "$(account)"
+      },
+      {
+        "command": "claudeSwitcher.switchNext",
+        "title": "Trocar para a próxima conta disponível",
+        "category": "Claude Switcher",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "claudeSwitcher.addAccount",
+        "title": "Adicionar conta",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.refresh",
+        "title": "Atualizar uso",
+        "category": "Claude Switcher"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Switcher",
+      "properties": {
+        "claudeSwitcher.pollIntervalMinutes": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "De quantos em quantos minutos consultar o uso da conta em uso. As outras contas são consultadas a cada 15 minutos e na hora em que o limite delas zera."
+        },
+        "claudeSwitcher.autoSwitch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Trocar sozinho para a próxima conta disponível quando a conta em uso esgotar, sem esperar o clique."
+        },
+        "claudeSwitcher.notifyWhenBack": {
+          "type": "boolean",
+          "default": true,
+          "description": "Avisar quando uma conta esgotada voltar a ficar disponível."
+        }
+      }
+    }
+  }
+}
