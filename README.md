@@ -4,12 +4,17 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 
 ## Como usar
 
-**Barra de status (canto inferior direito):** mostra a conta em uso e o uso das últimas 5h, por exemplo `Conta 1 · 41%`.
-- Fica amarela a partir de 80% e vermelha quando a conta esgota (`Conta 1 esgotada · volta 15:30`).
-- `· 2 fora` indica quantas outras contas estão esgotadas.
-- Passe o mouse para ver a tabela de todas as contas e clique para abrir o menu.
+**Ícone na barra lateral esquerda:** é o ícone de uma pessoa com duas setas circulares, que abre o painel **Contas**.
+- Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
+- O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
+- **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
+- No topo do painel ficam três botões: ⇄ trocar para a próxima disponível, ＋ adicionar conta e ⟳ atualizar o uso.
+- O ícone da barra lateral ganha um número quando há contas esgotadas.
 
-**Menu:** lista as contas com o uso de 5h e da semana e quando cada esgotada volta. Clique numa conta para trocar para ela. Os ícones ✏️ e 🗑️ renomeiam e removem a conta.
+**Barra de status (lado esquerdo):** mostra a conta em uso e o uso das 5h, por exemplo `Conta 1 · 41%`.
+- Fica amarela a partir de 80% e vermelha quando a conta esgota.
+- `· 2 fora` indica quantas outras contas estão esgotadas.
+- Clique para abrir um menu rápido de troca. Para esconder esse indicador, use `claudeSwitcher.showStatusBar`.
 
 **Avisos:**
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
@@ -20,7 +25,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 ### Adicionar as contas
 
 1. Na primeira vez, a conta que já está logada é salva sozinha como **Conta 1**.
-2. Abra o menu e clique em **Adicionar conta…**. Abre um terminal com `claude auth login`: faça login no navegador com a outra conta. Quando o login terminar, ela aparece na lista.
+2. No painel, clique em **＋ (Adicionar conta)**. Abre um terminal com `claude auth login`: faça login no navegador com a outra conta. Quando o login terminar, ela aparece na lista.
 3. Repita até ter as 5 contas.
 
 > Para trocar de conta use sempre o switcher, **nunca o Logout** do Claude Code.
@@ -32,6 +37,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 | `claudeSwitcher.autoSwitch` | `false` | Troca sozinho quando a conta em uso esgota, sem esperar o clique |
 | `claudeSwitcher.pollIntervalMinutes` | `3` | Intervalo, em minutos, entre consultas de uso da conta em uso |
 | `claudeSwitcher.notifyWhenBack` | `true` | Avisa quando uma conta esgotada volta |
+| `claudeSwitcher.showStatusBar` | `true` | Também mostra a conta em uso na barra de status |
 
 ## Como funciona
 

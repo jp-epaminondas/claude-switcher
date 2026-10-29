@@ -16,6 +16,8 @@ let store;
 let sw;
 let statusItem;
 let output;
+let tree;
+let treeView;
 let refreshMenu = null;
 let ticking = false;
 let tickAgain = false;
@@ -34,18 +36,25 @@ function activate(context) {
   store = new Store(dir);
   sw = new Switcher({ paths, store, switcherDir: dir, log });
 
-  statusItem = vscode.window.createStatusBarItem('claudeSwitcher.status', vscode.StatusBarAlignment.Right, 1000);
+  tree = new AccountsTree();
+  treeView = vscode.window.createTreeView('claudeSwitcher.accounts', { treeDataProvider: tree });
+
+  statusItem = vscode.window.createStatusBarItem('claudeSwitcher.status', vscode.StatusBarAlignment.Left, 100);
   statusItem.name = 'Claude Switcher';
   statusItem.command = 'claudeSwitcher.menu';
-  statusItem.show();
 
   context.subscriptions.push(
     output,
     statusItem,
+    treeView,
     vscode.commands.registerCommand('claudeSwitcher.menu', showMenu),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', switchNext),
     vscode.commands.registerCommand('claudeSwitcher.addAccount', addAccount),
     vscode.commands.registerCommand('claudeSwitcher.refresh', () => tick({ force: true })),
+    vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => withAccount(arg, pickAccount)),
+    vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => withAccount(arg, renameAccount)),
+    vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => withAccount(arg, removeAccount)),
+    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('claudeSwitcher') && render()),
   );
 
   // Claude Code rewrites the first two when it refreshes a token or someone logs in; other
@@ -131,7 +140,7 @@ function onActiveOut(data, acc, until) {
   if (!next) {
     vscode.window
       .showWarningMessage(`${acc.label} esgotou.${back} Nenhuma outra conta disponível agora.`, 'Ver contas')
-      .then((choice) => choice && showMenu());
+      .then((choice) => choice && showAccounts());
     return;
   }
   if (config().get('autoSwitch', false)) {
@@ -139,9 +148,13 @@ function onActiveOut(data, acc, until) {
     return;
   }
   vscode.window.showWarningMessage(`${acc.label} esgotou.${back}`, `Trocar para ${next.label}`, 'Ver contas').then((choice) => {
-    if (choice === 'Ver contas') showMenu();
+    if (choice === 'Ver contas') showAccounts();
     else if (choice) doSwitch(next.id);
   });
+}
+
+function showAccounts() {
+  vscode.commands.executeCommand('claudeSwitcher.accounts.focus');
 }
 
 async function doSwitch(id, prefix = '') {
@@ -194,7 +207,7 @@ async function switchNext() {
   const when = soon ? ` A primeira a voltar é ${soon.account.label}, ${fmtClock(soon.until)} (${fmtIn(soon.until)}).` : '';
   vscode.window
     .showWarningMessage(`Nenhuma outra conta disponível agora.${when}`, 'Ver contas')
-    .then((choice) => choice && showMenu());
+    .then((choice) => choice && showAccounts());
 }
 
 async function addAccount() {
@@ -231,6 +244,13 @@ function claudeExecutable() {
   return exe;
 }
 
+// Commands invoked from the side bar get a tree item; from code, an account id.
+function withAccount(arg, fn) {
+  const id = typeof arg === 'string' ? arg : arg && arg.accountId;
+  const acc = id && store.load().accounts.find((a) => a.id === id);
+  return acc ? fn(acc) : undefined;
+}
+
 async function pickAccount(acc) {
   const data = store.load();
   if (acc.id === data.activeId) {
@@ -249,6 +269,116 @@ async function pickAccount(acc) {
     if (!choice) return;
   }
   return doSwitch(acc.id);
+}
+
+async function renameAccount(acc) {
+  const label = await vscode.window.showInputBox({
+    title: 'Renomear conta',
+    prompt: acc.email,
+    value: acc.label,
+    validateInput: (v) => (v.trim() ? null : 'Digite um nome'),
+  });
+  if (label) await sw.rename(acc.id, label.trim());
+  render();
+}
+
+async function removeAccount(acc) {
+  const ok = await vscode.window.showWarningMessage(
+    `Remover ${acc.label} (${acc.email}) do switcher?`,
+    { modal: true, detail: 'O login dessa conta deixa de ficar salvo aqui. Para trazê-la de volta, use "Adicionar conta".' },
+    'Remover',
+  );
+  if (ok) await sw.remove(acc.id);
+  render();
+}
+
+// --- how an account is shown (side bar, menu, status bar tooltip) -------------------------
+
+function accountState(a, data, now) {
+  const active = a.id === data.activeId;
+  const st = outStatus(a.usage, now);
+  if (a.needsLogin) return { active, icon: 'warning', color: 'charts.yellow', situation: 'precisa de login de novo' };
+  if (st.out) {
+    const situation = st.until ? `esgotada · volta ${fmtClock(st.until, now)} (${fmtIn(st.until, now)})` : 'esgotada';
+    return { active, out: true, icon: 'error', color: 'charts.red', situation };
+  }
+  if (active) return { active, icon: 'pass-filled', color: 'charts.green', situation: 'em uso' };
+  return { active, icon: 'circle-large-outline', situation: 'disponível' };
+}
+
+function usageOf(a, now) {
+  const u = a.usage;
+  if (!u) return null;
+  return {
+    five: effectivePct(u.fiveHour, now),
+    fiveResets: u.fiveHour && u.fiveHour.resetsAt > now ? u.fiveHour.resetsAt : null,
+    week: effectivePct(u.sevenDay, now),
+    weekResets: u.sevenDay && u.sevenDay.resetsAt > now ? u.sevenDay.resetsAt : null,
+    fetchedAt: u.fetchedAt,
+  };
+}
+
+function usageSummary(a, now) {
+  const u = usageOf(a, now);
+  if (!u) return a.usageError ? 'uso indisponível' : 'uso ainda não consultado';
+  const parts = [];
+  if (u.five != null) parts.push(`5h ${fmtPct(u.five)}${u.five > 0 && u.five < 100 && u.fiveResets ? ` (zera ${fmtClock(u.fiveResets, now)})` : ''}`);
+  if (u.week != null) parts.push(`semana ${fmtPct(u.week)}`);
+  parts.push(`atualizado ${fmtClock(u.fetchedAt, now)}`);
+  return parts.join(' · ');
+}
+
+class AccountsTree {
+  constructor() {
+    this.changed = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this.changed.event;
+  }
+
+  refresh() {
+    this.changed.fire();
+  }
+
+  getTreeItem(item) {
+    return item;
+  }
+
+  // An empty list shows the "add account" welcome text from package.json.
+  getChildren(element) {
+    if (element) return [];
+    let data;
+    try {
+      data = store.load();
+    } catch (e) {
+      return [new vscode.TreeItem(e.message)];
+    }
+    const now = Date.now();
+    return data.accounts.map((a) => accountTreeItem(a, data, now));
+  }
+}
+
+function accountTreeItem(a, data, now) {
+  const s = accountState(a, data, now);
+  const u = usageOf(a, now);
+  const item = new vscode.TreeItem(a.label, vscode.TreeItemCollapsibleState.None);
+  item.id = a.id;
+  item.accountId = a.id;
+  item.iconPath = new vscode.ThemeIcon(s.icon, s.color ? new vscode.ThemeColor(s.color) : undefined);
+  if (a.needsLogin || s.out) item.description = s.situation;
+  else if (u) item.description = `${s.active ? 'em uso · ' : ''}5h ${fmtPct(u.five)} · semana ${fmtPct(u.week)}`;
+  else item.description = s.situation;
+  item.contextValue = s.active ? 'account.active' : 'account';
+  if (!s.active) item.command = { command: 'claudeSwitcher.useAccount', title: 'Usar esta conta', arguments: [a.id] };
+
+  const md = new vscode.MarkdownString('', true);
+  md.appendMarkdown(`**${escapeMd(a.label)}** · ${escapeMd(a.email || '')}\n\n$(${s.icon}) ${s.situation}\n\n`);
+  if (u) {
+    if (u.five != null) md.appendMarkdown(`- 5h: **${fmtPct(u.five)}**${u.fiveResets ? ` · zera ${fmtClock(u.fiveResets, now)}` : ''}\n`);
+    if (u.week != null) md.appendMarkdown(`- Semana: **${fmtPct(u.week)}**${u.weekResets ? ` · zera ${fmtClock(u.weekResets, now)}` : ''}\n`);
+    md.appendMarkdown(`\nAtualizado ${fmtClock(u.fetchedAt, now)}`);
+  }
+  if (!s.active) md.appendMarkdown('\n\n_Clique para usar esta conta._');
+  item.tooltip = md;
+  return item;
 }
 
 function showMenu() {
@@ -270,7 +400,19 @@ function showMenu() {
     const now = Date.now();
     const next = sw.pickNext(data, now);
     const items = [
-      ...data.accounts.map((a) => accountItem(a, data, now)),
+      ...data.accounts.map((a) => {
+        const s = accountState(a, data, now);
+        return {
+          label: `$(${s.icon}) ${a.label}`,
+          description: a.email,
+          detail: `${s.situation}  ·  ${usageSummary(a, now)}`,
+          account: a,
+          buttons: [
+            { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Renomear', action: 'rename' },
+            { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remover do switcher', action: 'remove' },
+          ],
+        };
+      }),
       { label: 'Ações', kind: vscode.QuickPickItemKind.Separator },
       {
         label: '$(arrow-swap) Trocar para a próxima disponível',
@@ -287,26 +429,10 @@ function showMenu() {
     if (again) qp.activeItems = [again];
   };
 
-  qp.onDidTriggerItemButton(async ({ item, button }) => {
-    const acc = item.account;
+  qp.onDidTriggerItemButton(({ item, button }) => {
     qp.hide();
-    if (button.action === 'rename') {
-      const label = await vscode.window.showInputBox({
-        title: 'Renomear conta',
-        prompt: acc.email,
-        value: acc.label,
-        validateInput: (v) => (v.trim() ? null : 'Digite um nome'),
-      });
-      if (label) await sw.rename(acc.id, label.trim());
-    } else if (button.action === 'remove') {
-      const ok = await vscode.window.showWarningMessage(
-        `Remover ${acc.label} (${acc.email}) do switcher?`,
-        { modal: true, detail: 'O login dessa conta deixa de ficar salvo aqui. Para trazê-la de volta, use "Adicionar conta".' },
-        'Remover',
-      );
-      if (ok) await sw.remove(acc.id);
-    }
-    render();
+    if (button.action === 'rename') renameAccount(item.account);
+    else if (button.action === 'remove') removeAccount(item.account);
   });
   qp.onDidAccept(() => {
     const item = qp.selectedItems[0];
@@ -327,53 +453,9 @@ function showMenu() {
   qp.show();
 }
 
-function accountItem(a, data, now) {
-  const active = a.id === data.activeId;
-  const st = outStatus(a.usage, now);
-  let icon;
-  let state;
-  if (a.needsLogin) {
-    icon = 'warning';
-    state = 'Precisa de login de novo';
-  } else if (st.out) {
-    icon = 'error';
-    state = st.until ? `Esgotada · volta ${fmtClock(st.until, now)} (${fmtIn(st.until, now)})` : 'Esgotada';
-  } else if (active) {
-    icon = 'pass-filled';
-    state = 'Em uso';
-  } else {
-    icon = 'circle-large-outline';
-    state = 'Disponível';
-  }
-  return {
-    label: `$(${icon}) ${a.label}`,
-    description: a.email,
-    detail: `${state}  ·  ${usageSummary(a, now)}`,
-    account: a,
-    buttons: [
-      { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Renomear', action: 'rename' },
-      { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remover do switcher', action: 'remove' },
-    ],
-  };
-}
-
-function usageSummary(a, now) {
-  const u = a.usage;
-  if (!u) return a.usageError ? 'uso indisponível' : 'uso ainda não consultado';
-  const parts = [];
-  const five = effectivePct(u.fiveHour, now);
-  if (five != null) {
-    const resets = five > 0 && five < 100 && u.fiveHour.resetsAt ? ` (zera ${fmtClock(u.fiveHour.resetsAt, now)})` : '';
-    parts.push(`5h ${fmtPct(five)}${resets}`);
-  }
-  const week = effectivePct(u.sevenDay, now);
-  if (week != null) parts.push(`semana ${fmtPct(week)}`);
-  parts.push(`atualizado ${fmtClock(u.fetchedAt, now)}`);
-  return parts.join(' · ');
-}
-
 function render() {
   if (!statusItem) return;
+  if (tree) tree.refresh();
   let data;
   try {
     data = store.load();
@@ -385,7 +467,14 @@ function render() {
   }
   const now = Date.now();
   const active = data.accounts.find((a) => a.id === data.activeId);
-  const othersOut = data.accounts.filter((a) => a !== active && outStatus(a.usage, now).out).length;
+  const outCount = data.accounts.filter((a) => outStatus(a.usage, now).out).length;
+  const othersOut = outCount - (active && outStatus(active.usage, now).out ? 1 : 0);
+
+  if (treeView) {
+    treeView.description = active ? active.label : '';
+    treeView.badge = outCount ? { value: outCount, tooltip: `${outCount} ${outCount > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined;
+  }
+
   let text;
   let bg;
   if (!data.accounts.length) {
@@ -407,6 +496,8 @@ function render() {
   statusItem.text = text;
   statusItem.backgroundColor = bg ? new vscode.ThemeColor(bg) : undefined;
   statusItem.tooltip = tooltip(data, now);
+  if (config().get('showStatusBar', true)) statusItem.show();
+  else statusItem.hide();
   if (refreshMenu) refreshMenu();
 }
 
@@ -420,14 +511,9 @@ function tooltip(data, now) {
   }
   md.appendMarkdown('**Contas do Claude**\n\n| | Conta | 5h | Semana | Situação |\n|:-:|:--|--:|--:|:--|\n');
   for (const a of data.accounts) {
-    const active = a.id === data.activeId;
-    const st = outStatus(a.usage, now);
-    let situation = active ? 'em uso' : 'disponível';
-    if (a.needsLogin) situation = 'precisa de login';
-    else if (st.out) situation = st.until ? `volta ${fmtClock(st.until, now)} (${fmtIn(st.until, now)})` : 'esgotada';
-    const five = fmtPct(effectivePct(a.usage && a.usage.fiveHour, now));
-    const week = fmtPct(effectivePct(a.usage && a.usage.sevenDay, now));
-    md.appendMarkdown(`| ${active ? '$(pass-filled)' : ''} | ${escapeMd(a.label)} | ${five} | ${week} | ${situation} |\n`);
+    const s = accountState(a, data, now);
+    const u = usageOf(a, now) || {};
+    md.appendMarkdown(`| $(${s.icon}) | ${escapeMd(a.label)} | ${fmtPct(u.five)} | ${fmtPct(u.week)} | ${s.situation} |\n`);
   }
   md.appendMarkdown('\nClique para trocar de conta.');
   return md;

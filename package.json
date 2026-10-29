@@ -20,7 +20,114 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeSwitcher",
+          "title": "Claude Switcher",
+          "icon": "media/switcher.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeSwitcher": [
+        {
+          "id": "claudeSwitcher.accounts",
+          "name": "Contas",
+          "icon": "media/switcher.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "claudeSwitcher.accounts",
+        "contents": "Nenhuma conta salva ainda.\n[Adicionar conta](command:claudeSwitcher.addAccount)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeSwitcher.switchNext",
+          "when": "view == claudeSwitcher.accounts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.addAccount",
+          "when": "view == claudeSwitcher.accounts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudeSwitcher.refresh",
+          "when": "view == claudeSwitcher.accounts",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "claudeSwitcher.useAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem == account",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.renameAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.removeAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "group": "inline@3"
+        },
+        {
+          "command": "claudeSwitcher.useAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem == account",
+          "group": "1_account@1"
+        },
+        {
+          "command": "claudeSwitcher.renameAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "group": "1_account@2"
+        },
+        {
+          "command": "claudeSwitcher.removeAccount",
+          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "group": "1_account@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "claudeSwitcher.useAccount",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.renameAccount",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.removeAccount",
+          "when": "false"
+        }
+      ]
+    },
     "commands": [
+      {
+        "command": "claudeSwitcher.useAccount",
+        "title": "Usar esta conta",
+        "category": "Claude Switcher",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "claudeSwitcher.renameAccount",
+        "title": "Renomear",
+        "category": "Claude Switcher",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "claudeSwitcher.removeAccount",
+        "title": "Remover do switcher",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
       {
         "command": "claudeSwitcher.menu",
         "title": "Contas",
@@ -36,12 +143,14 @@
       {
         "command": "claudeSwitcher.addAccount",
         "title": "Adicionar conta",
-        "category": "Claude Switcher"
+        "category": "Claude Switcher",
+        "icon": "$(add)"
       },
       {
         "command": "claudeSwitcher.refresh",
         "title": "Atualizar uso",
-        "category": "Claude Switcher"
+        "category": "Claude Switcher",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -62,6 +171,11 @@
           "type": "boolean",
           "default": true,
           "description": "Avisar quando uma conta esgotada voltar a ficar disponível."
+        },
+        "claudeSwitcher.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar a conta em uso também na barra de status (lado esquerdo)."
         }
       }
     }
