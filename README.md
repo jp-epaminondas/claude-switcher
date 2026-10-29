@@ -24,9 +24,16 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 
 ### Qual conta usar (⭐ e 🔥)
 
-No topo do painel aparece sempre uma frase com a melhor conta para usar agora, por exemplo:
+No final da lista de contas aparece sempre a melhor conta para usar agora, por exemplo:
 
-> ⭐ Continue na Conta 5: sobram 61% da semana (≈ 5 sessões de 5h) e ela renova amanhã 03:59 (em 15h08), use antes que perca.
+```
+⭐ Continue na Conta 5
+     sobram 61% da semana (≈ 5 sessões de 5h)
+     renova amanhã 03:59 (em 15h08)
+     use antes que perca
+```
+
+Quando a recomendada não é a conta em uso, passe o mouse no item ⭐ para ver o botão → que troca para ela.
 
 **Regra:** use primeiro a conta cuja semana renova antes. O que sobra nela é perdido na renovação, enquanto as outras guardam o saldo para depois. Esse é o melhor critério para não desperdiçar limite, e funciona melhor do que reagir só no último dia, quando o limite de 5h e as horas de sono já não deixam gastar tudo. Algumas regras complementam essa:
 - Contas esgotadas, quase vazias (menos de 5% da semana) ou com a semana ainda não iniciada vão para o fim da fila.
@@ -81,7 +88,7 @@ Diagnóstico: painel **Output → Claude Switcher**.
 ```sh
 npm test          # testes do núcleo (pasta temporária + API falsa, sem rede)
 npm run package   # gera o .vsix
-code --install-extension claude-switcher-0.2.0.vsix
+code --install-extension claude-switcher-0.2.1.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -65,7 +65,7 @@
       "view/item/context": [
         {
           "command": "claudeSwitcher.useAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem == account",
+          "when": "view == claudeSwitcher.accounts && viewItem =~ /^(account|advice)$/",
           "group": "inline@1"
         },
         {

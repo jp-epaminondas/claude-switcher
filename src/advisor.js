@@ -115,16 +115,18 @@ function fmtSessions(s) {
   return `${r} ${r === 1 ? 'sessão' : 'sessões'} de 5h`;
 }
 
-// Why this account is the one to use, in one line.
-function reason(x, now = Date.now()) {
-  if (!x) return '';
+// Why this account is the one to use, as short lines (the side bar shows one per row).
+function reasonLines(x, now = Date.now()) {
+  if (!x) return [];
   const when = x.resetsAt ? `${fmtClock(x.resetsAt, now)} (${fmtIn(x.resetsAt, now)})` : '';
   if (x.burn) {
     const sessions = x.sessions != null ? ` (≈ ${fmtSessions(x.sessions)})` : '';
-    return `sobram ${Math.round(x.left)}% da semana${sessions} e ela renova ${when}, use antes que perca`;
+    return [`sobram ${Math.round(x.left)}% da semana${sessions}`, `renova ${when}`, 'use antes que perca'];
   }
-  if (x.resetsAt) return `a semana dela renova ${when}; as que renovam depois ficam guardadas`;
-  return 'nenhuma conta tem uso prestes a vencer';
+  if (x.resetsAt) return [`a semana dela renova ${when}`, 'as que renovam depois ficam guardadas'];
+  return ['nenhuma conta tem uso prestes a vencer'];
 }
 
-module.exports = { advise, reason, learnSessionCost, fmtSessions };
+const reason = (x, now = Date.now()) => reasonLines(x, now).join(', ');
+
+module.exports = { advise, reason, reasonLines, learnSessionCost, fmtSessions };

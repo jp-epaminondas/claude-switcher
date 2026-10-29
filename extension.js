@@ -8,7 +8,7 @@ const { Store } = require('./src/store');
 const { Switcher } = require('./src/switcher');
 const { mtime } = require('./src/fsutil');
 const { outStatus, effectivePct, fmtClock, fmtIn, fmtPct } = require('./src/usage');
-const { advise, reason, fmtSessions } = require('./src/advisor');
+const { advise, reason, reasonLines, fmtSessions } = require('./src/advisor');
 
 const MINUTE = 60 * 1000;
 
@@ -351,19 +351,55 @@ class AccountsTree {
     return item;
   }
 
-  // An empty list shows the "add account" welcome text from package.json.
+  // Accounts, then the recommendation as the last entry. An empty list shows the
+  // "add account" welcome text from package.json.
   getChildren(element) {
-    if (element) return [];
+    if (element) return element.lines || [];
     let data;
     try {
       data = store.load();
     } catch (e) {
       return [new vscode.TreeItem(e.message)];
     }
+    if (!data.accounts.length) return [];
     const now = Date.now();
     const advice = adviceFor(data, now);
-    return data.accounts.map((a) => accountTreeItem(a, data, advice, now));
+    const spacer = new vscode.TreeItem('');
+    spacer.id = 'spacer';
+    return [...data.accounts.map((a) => accountTreeItem(a, data, advice, now)), spacer, adviceTreeItem(data, advice, now)];
   }
+}
+
+// "Which account should I use?", expanded into one short line per row.
+function adviceTreeItem(data, advice, now) {
+  const best = advice.best;
+  let title;
+  let lines;
+  if (best) {
+    title = `${best.active ? 'Continue na' : 'Use a'} ${best.acc.label}`;
+    lines = reasonLines(best, now);
+  } else {
+    const soon = sw.soonestBack(data, now);
+    title = 'Nenhuma conta disponível agora';
+    lines = soon ? [`a primeira a voltar é a ${soon.account.label}`, `${fmtClock(soon.until, now)} (${fmtIn(soon.until, now)})`] : [];
+  }
+  const item = new vscode.TreeItem(title, vscode.TreeItemCollapsibleState.Expanded);
+  item.id = 'advice';
+  item.iconPath = best
+    ? new vscode.ThemeIcon('star-full', new vscode.ThemeColor('charts.yellow'))
+    : new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.red'));
+  item.tooltip = headline(data, advice, now);
+  // A switch button instead of a click action: clicking would also collapse the item.
+  if (best && !best.active) {
+    item.contextValue = 'advice';
+    item.accountId = best.id;
+  }
+  item.lines = lines.map((text, i) => {
+    const line = new vscode.TreeItem(text);
+    line.id = `advice.${i}`;
+    return line;
+  });
+  return item;
 }
 
 function accountTreeItem(a, data, advice, now) {
@@ -400,7 +436,7 @@ function accountTreeItem(a, data, advice, now) {
   return item;
 }
 
-// One-line answer to "which account should I use?", shown on top of the side bar list.
+// One-line answer to "which account should I use?" for tooltips.
 function headline(data, advice, now) {
   if (!data.accounts.length) return undefined;
   const best = advice.best;
@@ -504,7 +540,6 @@ function render() {
   const othersOut = outCount - (active && outStatus(active.usage, now).out ? 1 : 0);
 
   if (treeView) {
-    treeView.message = headline(data, advice, now);
     treeView.description = active ? active.label : '';
     treeView.badge = outCount ? { value: outCount, tooltip: `${outCount} ${outCount > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined;
   }
