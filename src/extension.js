@@ -7,7 +7,7 @@ const { claudePaths, switcherDir } = require('./core/paths');
 const { Store } = require('./core/store');
 const { Switcher } = require('./core/switcher');
 const { mtime } = require('./core/fsutil');
-const { advise } = require('./core/advisor');
+const { adviseWithPlan } = require('./core/planner');
 const { createActions } = require('./ui/actions');
 const { createAccountsView } = require('./ui/accountsView');
 const { createMenu } = require('./ui/menu');
@@ -19,7 +19,12 @@ const MINUTE = 60 * 1000;
 function activate(context) {
   const output = vscode.window.createOutputChannel('Claude Switcher');
   const config = () => vscode.workspace.getConfiguration('claudeSwitcher');
-  const adviceOptions = () => ({ burnWindowHours: Math.max(1, Number(config().get('burnWindowHours')) || 24) });
+  const adviceOptions = () => ({
+    burnWindowHours: Math.max(1, Number(config().get('burnWindowHours')) || 24),
+    maxWaitMin: Math.max(1, Number(config().get('maxWaitMinutes')) || 20),
+    notifyPace: config().get('notifyPace', true),
+  });
+  const rank = (data, now) => adviseWithPlan(data, now, adviceOptions());
   const log = (msg) => output.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
   const paths = claudePaths();
   const dir = switcherDir();
@@ -30,10 +35,10 @@ function activate(context) {
     paths,
     switcherDir: dir,
     store,
-    sw: new Switcher({ paths, store, switcherDir: dir, log }),
+    sw: new Switcher({ paths, store, switcherDir: dir, log, rank }),
     log,
     config,
-    advise: (data, now) => advise(data, now, adviceOptions()),
+    advise: rank,
     render: () => render(),
     tick: (opts) => tick(opts),
   };

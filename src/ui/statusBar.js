@@ -2,7 +2,7 @@
 
 // The account in use, on the left of the status bar; click opens the quick menu.
 const vscode = require('vscode');
-const { outStatus, effectivePct, fmtClock, fmtPct } = require('../core/usage');
+const { outStatus, effectivePct, fmtClock, fmtMinutes, fmtPct } = require('../core/usage');
 const { accountState, usageOf, flagOf, headline, escapeMd } = require('./present');
 
 function createStatusBar(app) {
@@ -57,6 +57,13 @@ function tooltip(data, advice, now, autoSwitch) {
   }
   const flags = { best: '⭐ ', burn: '🔥 ' };
   md.appendMarkdown(`${escapeMd(headline(data, advice, now))}\n\n`);
+  const p = advice.plan;
+  const forecast = p && {
+    ok: '✅ Previsão: as contas aguentam o seu ritmo.',
+    pace: p.pace && `⏸ Previsão: faça uma pausa de ${p.pace.pauseMin} min a cada ~${fmtMinutes(p.pace.workMin)} de uso.`,
+    short: '⚠ Previsão: as contas não aguentam o seu ritmo. Veja o painel Contas.',
+  }[p.verdict];
+  if (forecast) md.appendMarkdown(`${forecast}\n\n`);
   md.appendMarkdown('| | Conta | 5h | Semana | Situação |\n|:-:|:--|--:|--:|:--|\n');
   for (const a of data.accounts) {
     const s = accountState(a, data, now);

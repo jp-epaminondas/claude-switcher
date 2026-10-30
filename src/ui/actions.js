@@ -4,7 +4,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { outStatus, fmtClock, fmtIn } = require('../core/usage');
+const { outStatus, fmtClock, fmtIn, fmtMinutes } = require('../core/usage');
 const { reason, soonestBack } = require('../core/advisor');
 
 function createActions(app) {
@@ -132,6 +132,7 @@ function createActions(app) {
   }
 
   function onEvent(ev) {
+    if (['stopSoon', 'pause', 'short'].includes(ev.type)) return onPlanEvent(ev);
     const data = store.load();
     const acc = data.accounts.find((a) => a.id === ev.id);
     if (!acc) return;
@@ -151,6 +152,32 @@ function createActions(app) {
           .showInformationMessage(`✅ ${acc.label} voltou e já está disponível.`, `Usar ${acc.label}`)
           .then((choice) => choice && doSwitch(acc.id));
       }
+    }
+  }
+
+  // Reminders from the forecast (see planner.js).
+  function onPlanEvent(ev) {
+    const M = ev.maxWaitMin;
+    const openLimit = () => vscode.commands.executeCommand('workbench.action.openSettings', 'claudeSwitcher.maxWaitMinutes');
+    if (ev.type === 'stopSoon') {
+      const back = ev.end ? `a primeira volta ${fmtClock(ev.end)}` : 'nenhuma volta tão cedo';
+      const tail = ev.minutes > M ? ` Uma pausa agora encurta essa espera.` : ' Se der, pare num ponto bom da tarefa.';
+      vscode.window.showWarningMessage(
+        `⏳ No ritmo atual, todas as contas esgotam ${fmtIn(ev.start)}; ${back} (${fmtMinutes(ev.minutes)} parado).${tail}`,
+      );
+    } else if (ev.type === 'pause') {
+      vscode.window.showInformationMessage(
+        `⏸ Faça uma pausa de ${ev.pauseMin} min agora. No seu ritmo, uma pausa assim a cada ~${fmtMinutes(ev.workMin)} de uso faz as contas aguentarem sem você ficar mais de ${M} min parado.`,
+      );
+    } else if (ev.type === 'short') {
+      const more = ev.extraAccounts ? `${ev.extraAccounts} ${ev.extraAccounts > 1 ? 'contas' : 'conta'} a mais` : 'mais contas';
+      vscode.window
+        .showWarningMessage(
+          `⚠ No seu ritmo as contas não aguentam: até ${fmtClock(ev.until)} você ficaria ~${fmtMinutes(ev.minutes)} sem poder usar. Aumente o tempo de espera ou adicione ${more}.`,
+          'Tempo de espera',
+          'Adicionar conta',
+        )
+        .then((choice) => (choice === 'Tempo de espera' ? openLimit() : choice && addAccount()));
     }
   }
 

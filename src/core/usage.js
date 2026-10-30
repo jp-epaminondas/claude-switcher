@@ -65,17 +65,22 @@ function fmtClock(ms, now = Date.now()) {
 
 // "em 45min", "em 2h05", "em 3d 4h".
 function fmtIn(ms, now = Date.now()) {
-  let min = Math.max(0, Math.round((ms - now) / 60000));
-  if (min < 1) return 'agora';
+  const min = Math.max(0, Math.round((ms - now) / 60000));
+  return min < 1 ? 'agora' : `em ${fmtMinutes(min)}`;
+}
+
+// "45min", "2h05", "3d 4h".
+function fmtMinutes(total) {
+  let min = Math.max(0, Math.round(total));
   const d = Math.floor(min / 1440);
   min -= d * 1440;
   const h = Math.floor(min / 60);
   min -= h * 60;
-  if (d) return `em ${d}d ${h}h`;
-  if (h) return `em ${h}h${min ? pad(min) : ''}`;
-  return `em ${min}min`;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h${min ? pad(min) : ''}`;
+  return `${min}min`;
 }
 
 const fmtPct = (p) => (p == null ? '–' : `${Math.round(p)}%`);
 
-module.exports = { normalizeUsage, effectivePct, outStatus, fmtClock, fmtIn, fmtPct };
+module.exports = { normalizeUsage, effectivePct, outStatus, fmtClock, fmtIn, fmtMinutes, fmtPct };

@@ -4,6 +4,7 @@ const defaultApi = require('./api');
 const files = require('./claudeFiles');
 const { normalizeUsage, outStatus } = require('./usage');
 const { advise, learnSessionCost } = require('./advisor');
+const { learnDemand, workedFor } = require('./demand');
 
 const HOUR = 3600 * 1000;
 
@@ -21,12 +22,14 @@ const sameTokens = (a, b) =>
 // them in place, and a refresh token may be single-use, so this class never refreshes the live
 // account's token. It only refreshes saved accounts that are verifiably not the live one.
 class Switcher {
-  constructor({ paths, store, switcherDir, log = () => {}, api = defaultApi }) {
+  // `rank` orders the accounts (advise() or adviseWithPlan()); the switch and the events use it.
+  constructor({ paths, store, switcherDir, log = () => {}, api = defaultApi, rank = advise }) {
     this.paths = paths;
     this.store = store;
     this.switcherDir = switcherDir;
     this.log = log;
     this.api = api;
+    this.rank = rank;
     this.owners = new Map(); // accessToken -> profile
     this.captureNext = false; // set by "add account": save the next login even if it was removed before
   }
@@ -279,6 +282,7 @@ class Switcher {
       if (!acc || (acc.usage && acc.usage.fetchedAt >= fetchedAt)) return false;
       const usage = normalizeUsage(raw, fetchedAt);
       learnSessionCost(acc, acc.usage, usage);
+      learnDemand(data, acc, usage, acc.id === data.activeId);
       acc.usage = usage;
       acc.usageError = null;
       acc.usageErrorAt = null;
@@ -311,7 +315,8 @@ class Switcher {
           events.push({ type: 'back', id: acc.id, active: acc.id === data.activeId });
         }
       }
-      const best = advise(data, now, adviceOptions).best;
+      const advice = this.rank(data, now, adviceOptions);
+      const best = advice.best;
       if (best && best.burn && !best.active) {
         const week = Math.round(best.resetsAt / HOUR); // once per account per weekly cycle
         if (best.acc.burnNotified !== week) {
@@ -319,13 +324,14 @@ class Switcher {
           events.push({ type: 'burn', id: best.id });
         }
       }
+      if (advice.plan && adviceOptions.notifyPace !== false) events.push(...planEvents(data, advice.plan, now));
       return events;
     });
   }
 
   // Account to move to (never the one in use): see advise() for the ranking.
   pickNext(data, now = Date.now()) {
-    const next = advise(data, now).next;
+    const next = this.rank(data, now).next;
     return next ? next.acc : null;
   }
 
@@ -344,6 +350,31 @@ class Switcher {
       if (!data.ignored.includes(id)) data.ignored.push(id);
     });
   }
+}
+
+// Reminders from the plan, each at most so often: a heads-up before every account runs out,
+// the next pause once enough work has gone by, and a daily note when even pauses won't do.
+function planEvents(data, p, now) {
+  const pn = (data.planNotified = data.planNotified || {});
+  const events = [];
+  if (p.nextStop && p.activeNow && p.nextStop.start - now <= 30 * MINUTE && (!pn.stopAt || now - pn.stopAt > 2 * HOUR)) {
+    pn.stopAt = now;
+    events.push({ type: 'stopSoon', start: p.nextStop.start, end: p.nextStop.end, minutes: p.nextStop.minutes, maxWaitMin: p.maxWaitMin });
+  } else if (p.verdict === 'pace' && workedFor(data.demand, now) > 0) {
+    const since = Math.max(data.demand.workStart, (pn.pauseAt || 0) + p.pace.pauseMin * MINUTE);
+    if (now - since >= p.pace.workMin * MINUTE) {
+      pn.pauseAt = now;
+      events.push({ type: 'pause', ...p.pace, maxWaitMin: p.maxWaitMin });
+    }
+  }
+  if (p.verdict === 'short' && p.learned) {
+    const day = new Date(now).toDateString();
+    if (pn.short !== day) {
+      pn.short = day;
+      events.push({ type: 'short', ...p.short, maxWaitMin: p.maxWaitMin });
+    }
+  }
+  return events;
 }
 
 module.exports = { Switcher, isExpired };

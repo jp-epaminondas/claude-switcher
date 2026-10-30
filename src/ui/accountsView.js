@@ -1,8 +1,9 @@
 'use strict';
 
-// Side bar list: the accounts, the recommendation, then the autoswitcher switch.
+// Side bar list: the accounts, the recommendation, the forecast, then the autoswitcher switch.
 const vscode = require('vscode');
-const { outStatus, fmtClock, fmtIn, fmtPct } = require('../core/usage');
+const { outStatus, fmtClock, fmtIn, fmtMinutes, fmtPct } = require('../core/usage');
+const { MIN_DAYS } = require('../core/demand');
 const { reason, reasonLines, soonestBack, fmtSessions } = require('../core/advisor');
 const { accountState, usageOf, flagOf, headline, escapeMd } = require('./present');
 
@@ -28,6 +29,7 @@ function createAccountsView(app) {
         ...data.accounts.map((a) => accountItem(a, data, advice, now)),
         spacer('spacer'),
         adviceItem(data, advice, now),
+        ...(advice.plan ? [forecastItem(advice.plan, now)] : []),
         spacer('spacer.auto'),
         autoSwitchItem(app.autoSwitch),
       ];
@@ -114,6 +116,63 @@ function adviceItem(data, advice, now) {
     line.id = `advice.${i}`;
     return line;
   });
+  return item;
+}
+
+// "Will the accounts last at my pace?", from planner.js. A click opens the wait limit setting.
+function forecastItem(p, now) {
+  const M = p.maxWaitMin;
+  const at = (e) => `${fmtMinutes(e.minutes)} parado ${fmtClock(e.start, now)}`;
+  const orWait = p.noPauseWaitMin ? [`ou aceite esperas de até ${p.noPauseWaitMin} min`] : [];
+  let title;
+  let icon;
+  let lines;
+  // In how many of 10 possible weeks no wait goes over the limit, even without pauses.
+  const odds = p.learned && p.scenarios > 1 ? `sem pausas, aguenta em ${Math.round(p.okShare * 10)} de 10 semanas` : null;
+  if (p.verdict === 'learning') {
+    title = 'Previsão: aprendendo seu ritmo';
+    icon = new vscode.ThemeIcon('history');
+    lines = [`${p.daysObserved} de ${MIN_DAYS} dias com dados`, 'até lá, só prevê as próximas 2h de uso'];
+  } else if (p.verdict === 'ok') {
+    title = 'Previsão: as contas aguentam';
+    icon = new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'));
+    lines = p.longest
+      ? [`maior espera provável: ${at(p.longest)}`, `dentro do seu limite de ${M} min`]
+      : [p.learned ? 'nenhuma espera nos próximos 7 dias' : 'nenhuma espera nas próximas 2h'];
+  } else if (p.verdict === 'pace') {
+    title = 'Previsão: faça pausas';
+    icon = new vscode.ThemeIcon('debug-pause', new vscode.ThemeColor('charts.yellow'));
+    lines = [`pausa de ${p.pace.pauseMin} min a cada ~${fmtMinutes(p.pace.workMin)} de uso`, `sem pausas: ${at(p.longest)}`, ...orWait];
+  } else {
+    const n = p.short.extraAccounts;
+    title = 'Previsão: as contas não aguentam';
+    icon = new vscode.ThemeIcon('warning', new vscode.ThemeColor('charts.red'));
+    lines = [
+      `~${fmtMinutes(p.short.minutes)} sem poder usar até ${fmtClock(p.short.until, now)}`,
+      n ? `adicione ${n} ${n > 1 ? 'contas' : 'conta'} para dar` : 'nem com 3 contas a mais dá',
+      ...orWait,
+    ];
+  }
+  if (odds && (p.verdict === 'ok' || p.verdict === 'pace') && p.okShare < 1) lines.push(odds);
+  if (p.learned) lines.push(`com base em ${p.daysObserved} dias do seu uso`);
+  else if (p.verdict !== 'learning') lines.push('ainda aprendendo: vale para as próximas 2h');
+  const item = new vscode.TreeItem(title, vscode.TreeItemCollapsibleState.Expanded);
+  item.id = 'forecast';
+  item.iconPath = icon;
+  item.lines = lines.map((text, i) => Object.assign(new vscode.TreeItem(text), { id: `forecast.${i}` }));
+  const md = new vscode.MarkdownString('', true);
+  md.appendMarkdown(
+    `Previsão pelo seu ritmo de uso: quando todas as contas esgotariam ao mesmo tempo e por quanto tempo. Seu limite: **${M} min** parado de uma vez.\n\n`,
+  );
+  md.appendMarkdown(
+    'Ela sorteia semanas a partir dos seus dias reais, puxados e leves, sem supor dia da semana, e planeja pela pior de cada 5. O resto de hoje segue os dias que começaram como hoje.\n\n',
+  );
+  md.appendMarkdown(
+    'Pausar não devolve uso, porque a janela de 5h zera num horário fixo. A pausa deixa você escolher quando esperar, em pedaços menores que o seu limite, em vez de ser cortado no meio de uma tarefa.\n\n',
+  );
+  md.appendMarkdown('_Clique para mudar o limite._');
+  item.tooltip = md;
+  item.command = { command: 'workbench.action.openSettings', title: 'Tempo máximo de espera', arguments: ['claudeSwitcher.maxWaitMinutes'] };
   return item;
 }
 

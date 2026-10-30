@@ -63,6 +63,37 @@ Se a conta recomendada tem 🔥 e não é a que está em uso, chega um aviso com
 
 **Aprendizado:** a extensão observa quanto da semana cada sessão de 5h consome nas suas contas. Com isso ela mostra quantas sessões ainda sobram e detecta mais cedo uma conta que não vai dar tempo de gastar. Esse número aparece depois que a extensão acompanha pelo menos uma sessão de 5h com uso real.
 
+### Previsão: nunca ficar sem conta
+
+A extensão aprende o seu ritmo de uso e prevê se as contas aguentam. No painel, abaixo do ⭐, aparece um destes:
+
+```
+✅ Previsão: as contas aguentam        nenhuma espera nos próximos 7 dias
+⏸ Previsão: faça pausas               pausa de 10 min a cada ~50min de uso
+                                        sem pausas: 4h30 parado qui 16:30
+⚠ Previsão: as contas não aguentam    ~6h sem poder usar até dom 19:00
+                                        adicione 1 conta para dar
+```
+
+**Tempo máximo de espera** (`claudeSwitcher.maxWaitMinutes`, padrão 20 min): quanto tempo você aceita ficar sem poder usar o Claude de uma vez. Para mudar, clique na Previsão.
+
+**Pausas:** pausar não devolve uso, porque a janela de 5h zera num horário fixo, 5h depois da primeira mensagem. O tempo total parado é o mesmo com ou sem pausa. A pausa serve para você escolher quando esperar, em pedaços menores que o seu limite, em vez de ser cortado no meio de uma tarefa por mais tempo. Por exemplo, em vez de travar 1h, você faz algumas pausas de 10 min.
+
+**Avisos** (desligue em `claudeSwitcher.notifyPace`):
+- *"⏸ Faça uma pausa de 10 min agora"*: aparece depois de ~50 min de uso contínuo, quando o plano pede pausas.
+- *"⏳ No ritmo atual, todas as contas esgotam em 25min…"*: aparece antes de todas acabarem ao mesmo tempo.
+- *"⚠ No seu ritmo as contas não aguentam… Aumente o tempo de espera ou adicione 1 conta a mais"*: aparece no máximo uma vez por dia. Ele diz quantas contas a mais resolveriam, até 3.
+
+**Como aprende:** a cada consulta de uso, a extensão anota quanto da janela de 5h foi gasto, hora a hora, e guarda os seus últimos 35 dias. Ela não supõe rotina semanal, porque tem dia de trabalhar o dia todo e dia de quase nada, sem regra de dia da semana.
+- **Semanas sorteadas:** para prever, ela monta 40 semanas possíveis sorteando dias reais do seu histórico. Os dias recentes pesam mais, então uma mudança de hábito aparece logo.
+- **Planejado pelo caso ruim provável:** o plano segue a pior de cada 5 semanas, não a média. Assim os dias puxados ficam cobertos. A Previsão também mostra em quantas de 10 semanas as contas aguentam sem pausas.
+- **Hoje entra no cálculo:** se o dia está sendo puxado até agora, o resto dele segue os dias passados que começaram parecidos. Na próxima hora, o ritmo atual pesa mais.
+- **Começo:** a previsão da semana começa depois de 3 dias com dados. Antes disso, ela só prevê as próximas 2h pelo ritmo atual. Dias com o VS Code fechado quase o tempo todo (menos de 6h observadas) ficam de fora.
+
+**Qual conta usar:** o ⭐ continua seguindo a regra de não desperdiçar a semana. Ele só muda quando outra conta melhora a previsão (de "não aguenta" para "aguenta", ou sem precisar de pausas) ou evita pelo menos 15 min de espera nas próximas 24h. Nesse caso o motivo aparece no próprio ⭐. O botão ⇄ e o autoswitcher usam a mesma escolha.
+
+A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoje.
+
 ### Adicionar as contas
 
 1. Na primeira vez, a conta que já está logada é salva sozinha como **Conta 1**.
@@ -76,6 +107,8 @@ Se a conta recomendada tem 🔥 e não é a que está em uso, chega um aviso com
 | Configuração | Padrão | O que faz |
 |---|---|---|
 | `claudeSwitcher.autoSwitch` | `false` | Autoswitcher: troca sozinho quando a conta em uso esgota e o Claude continua a tarefa |
+| `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
+| `claudeSwitcher.notifyPace` | `true` | Avisos da previsão: pausa, todas as contas para esgotar, contas que não aguentam |
 | `claudeSwitcher.pollIntervalMinutes` | `3` | Intervalo, em minutos, entre consultas de uso da conta em uso |
 | `claudeSwitcher.notifyWhenBack` | `true` | Avisa quando uma conta esgotada volta |
 | `claudeSwitcher.burnWindowHours` | `24` | Quantas horas antes da renovação semanal uma conta com saldo ganha 🔥 |
@@ -106,6 +139,8 @@ src/
   core/              lógica sem dependência do VS Code (coberta pelos testes)
     switcher.js      salvar, identificar e trocar contas; consultar uso
     advisor.js       qual conta usar (⭐/🔥) e aprendizado do custo de uma sessão
+    demand.js        guarda os seus dias de uso, hora a hora, e sorteia semanas possíveis
+    planner.js       simula os próximos 7 dias: esperas, pausas e se as contas aguentam
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
@@ -131,7 +166,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.3.0.vsix
+code --install-extension dist/claude-switcher-0.5.0.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

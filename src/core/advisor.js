@@ -132,6 +132,7 @@ function fmtSessions(s) {
 // Why this account is the one to use, as short lines (the side bar shows one per row).
 function reasonLines(x, now = Date.now()) {
   if (!x) return [];
+  if (x.planReason) return [x.planReason, 'pela previsão do seu ritmo'];
   const when = x.resetsAt ? `${fmtClock(x.resetsAt, now)} (${fmtIn(x.resetsAt, now)})` : '';
   if (x.burn) {
     const sessions = x.sessions != null ? ` (≈ ${fmtSessions(x.sessions)})` : '';
@@ -143,4 +144,4 @@ function reasonLines(x, now = Date.now()) {
 
 const reason = (x, now = Date.now()) => reasonLines(x, now).join(', ');
 
-module.exports = { advise, reason, reasonLines, soonestBack, learnSessionCost, fmtSessions };
+module.exports = { advise, reason, reasonLines, soonestBack, learnSessionCost, sessionCost, hitLimitUnchecked, fmtSessions };
