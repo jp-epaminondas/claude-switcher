@@ -8,6 +8,8 @@ const { advise, learnSessionCost } = require('./advisor');
 const HOUR = 3600 * 1000;
 
 const MINUTE = 60 * 1000;
+const RECENT_SWITCH_MS = MINUTE;
+const LIMIT_HIT_TTL = 30 * MINUTE;
 const isExpired = (oauth, marginMs = MINUTE) => !oauth || !oauth.expiresAt || oauth.expiresAt - Date.now() < marginMs;
 const find = (data, id) => data.accounts.find((a) => a.id === id);
 const sameTokens = (a, b) =>
@@ -108,41 +110,90 @@ class Switcher {
   }
 
   async switchTo(id) {
-    return this.store.update(async (data) => {
-      const target = find(data, id);
-      if (!target) throw new Error('conta não encontrada');
-      const live = await this.identifyLive(data);
-      // Save the outgoing account's newest tokens before they're replaced.
-      this.absorbLive(data, live, { trustGuess: true });
-      if (live.oauth && live.id === id) {
-        data.activeId = id;
-        return { already: true, account: target };
-      }
-      if (!target.credentials) throw new Error(`${target.label} não tem login salvo`);
-      // Not live, so its tokens are ours to refresh. Doing it here catches a dead login
-      // before Claude Code is pointed at it.
-      if (isExpired(target.credentials)) {
-        try {
-          target.credentials = await this.api.refreshOAuth(target.credentials);
-          target.needsLogin = false;
-        } catch (e) {
-          if (!e.isAuth) throw e;
-          target.needsLogin = true;
-          return { needsLogin: true, account: target };
-        }
-      }
-      files.backupOnce(this.paths, this.switcherDir);
-      await files.writeLiveOauth(this.paths, target.credentials);
-      if (target.oauthAccount) {
-        try {
-          await files.writeOauthAccount(this.paths, target.oauthAccount);
-        } catch (e) {
-          this.log(`credenciais trocadas, mas não consegui atualizar oauthAccount em .claude.json: ${e.message}`);
-        }
-      }
+    return this.store.update((data) => this.switchIn(data, id));
+  }
+
+  // switchTo() for callers already inside store.update().
+  async switchIn(data, id) {
+    const target = find(data, id);
+    if (!target) throw new Error('conta não encontrada');
+    const live = await this.identifyLive(data);
+    // Save the outgoing account's newest tokens before they're replaced.
+    this.absorbLive(data, live, { trustGuess: true });
+    if (live.oauth && live.id === id) {
       data.activeId = id;
-      this.owners.set(target.credentials.accessToken, { accountUuid: id, email: target.email, oauthAccount: target.oauthAccount });
-      return { switched: true, account: target, fromId: live.id };
+      return { already: true, account: target };
+    }
+    if (!target.credentials) throw new Error(`${target.label} não tem login salvo`);
+    // Not live, so its tokens are ours to refresh. Doing it here catches a dead login
+    // before Claude Code is pointed at it.
+    if (isExpired(target.credentials)) {
+      try {
+        target.credentials = await this.api.refreshOAuth(target.credentials);
+        target.needsLogin = false;
+      } catch (e) {
+        if (!e.isAuth) throw e;
+        target.needsLogin = true;
+        return { needsLogin: true, account: target };
+      }
+    }
+    files.backupOnce(this.paths, this.switcherDir);
+    await files.writeLiveOauth(this.paths, target.credentials);
+    if (target.oauthAccount) {
+      try {
+        await files.writeOauthAccount(this.paths, target.oauthAccount);
+      } catch (e) {
+        this.log(`credenciais trocadas, mas não consegui atualizar oauthAccount em .claude.json: ${e.message}`);
+      }
+    }
+    data.activeId = id;
+    data.lastSwitch = { at: Date.now(), toId: id };
+    this.owners.set(target.credentials.accessToken, { accountUuid: id, email: target.email, oauthAccount: target.oauthAccount });
+    return { switched: true, account: target, fromId: live.id };
+  }
+
+  // A Claude Code session stopped because its account hit the usage limit (reported by the
+  // StopFailure hook at `at`). Moves to the next account unless that already happened, and
+  // says whether the session should resume.
+  async onLimit({ sessionId, at = Date.now() }) {
+    return this.store.update(async (data) => {
+      const now = Date.now();
+      this.absorbLive(data, await this.identifyLive(data), { trustGuess: true });
+      const hits = {};
+      for (const [k, v] of Object.entries(data.limitHits || {})) if (now - v.at < LIMIT_HIT_TTL) hits[k] = v;
+      data.limitHits = hits;
+      const prev = hits[sessionId];
+      const current = find(data, data.activeId) || null;
+      const count = (prev ? prev.count : 0) + 1;
+      const record = (acc) => (hits[sessionId] = { accountId: acc ? acc.id : null, at: now, count });
+
+      // Backstop: a session that keeps failing stays stopped.
+      if (count > Math.max(3, data.accounts.length + 1)) {
+        record(current);
+        return { resume: false, reason: 'loop', from: current };
+      }
+      // The request failed on the account that was live when it went out. A switch moments
+      // before (another session's limit, or a click) means it failed on the old account and
+      // only needs to resume, unless this session already resumed here and failed again.
+      const last = data.lastSwitch;
+      const resumedHere = prev && current && prev.accountId === current.id;
+      if (current && last && last.toId === current.id && last.at > at - RECENT_SWITCH_MS && !resumedHere) {
+        record(current);
+        return { resume: true, account: current };
+      }
+      // Out until its usage is fetched again, so the ranking can't send us straight back.
+      if (current) current.limitHitAt = now;
+      for (;;) {
+        const next = this.pickNext(data, now);
+        if (!next) {
+          record(current);
+          return { resume: false, reason: 'none', from: current };
+        }
+        const r = await this.switchIn(data, next.id);
+        if (r.needsLogin) continue; // now flagged, so pickNext skips it
+        record(r.account);
+        return { resume: true, switched: true, from: current, account: r.account };
+      }
     });
   }
 

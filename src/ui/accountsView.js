@@ -1,6 +1,6 @@
 'use strict';
 
-// Side bar list: the accounts, then the recommendation as the last entry.
+// Side bar list: the accounts, the recommendation, then the autoswitcher switch.
 const vscode = require('vscode');
 const { outStatus, fmtClock, fmtIn, fmtPct } = require('../core/usage');
 const { reason, reasonLines, soonestBack, fmtSessions } = require('../core/advisor');
@@ -23,9 +23,14 @@ function createAccountsView(app) {
       if (!data.accounts.length) return [];
       const now = Date.now();
       const advice = app.advise(data, now);
-      const spacer = new vscode.TreeItem('');
-      spacer.id = 'spacer';
-      return [...data.accounts.map((a) => accountItem(a, data, advice, now)), spacer, adviceItem(data, advice, now)];
+      const spacer = (id) => Object.assign(new vscode.TreeItem(''), { id });
+      return [
+        ...data.accounts.map((a) => accountItem(a, data, advice, now)),
+        spacer('spacer'),
+        adviceItem(data, advice, now),
+        spacer('spacer.auto'),
+        autoSwitchItem(app.autoSwitch),
+      ];
     },
   };
   const view = vscode.window.createTreeView('claudeSwitcher.accounts', { treeDataProvider: provider });
@@ -109,6 +114,27 @@ function adviceItem(data, advice, now) {
     line.id = `advice.${i}`;
     return line;
   });
+  return item;
+}
+
+// On/off switch for the autoswitcher; a click flips it.
+function autoSwitchItem(auto) {
+  const on = !!auto && auto.enabled();
+  const problem = on && auto.hookProblem();
+  const item = new vscode.TreeItem('Autoswitcher');
+  item.id = 'autoSwitch';
+  item.description = on ? (problem ? 'ligado · sem continuar sozinho' : 'ligado · troca e continua sozinho') : 'desligado';
+  item.iconPath = on
+    ? new vscode.ThemeIcon(problem ? 'warning' : 'sync', new vscode.ThemeColor(problem ? 'charts.yellow' : 'charts.green'))
+    : new vscode.ThemeIcon('sync-ignored');
+  item.command = { command: 'claudeSwitcher.toggleAutoSwitch', title: on ? 'Desligar autoswitcher' : 'Ligar autoswitcher' };
+  const md = new vscode.MarkdownString('', true);
+  md.appendMarkdown(
+    'Quando a conta em uso esgota, o switcher troca para a próxima disponível e o Claude Code continua a tarefa sozinho, sem precisar digitar "continue".\n\n',
+  );
+  if (problem) md.appendMarkdown(`$(warning) A troca é automática, mas o Claude não continua sozinho: ${escapeMd(problem)}.\n\n`);
+  md.appendMarkdown(on ? '_Clique para desligar._' : '_Clique para ligar._');
+  item.tooltip = md;
   return item;
 }
 

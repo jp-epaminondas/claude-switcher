@@ -38,12 +38,7 @@ function createActions(app) {
       return;
     }
     log(`trocado para ${acc.label} (${acc.email})`);
-    vscode.window
-      .showInformationMessage(
-        `${prefix}Agora usando ${acc.label} (${acc.email}). O Claude Code passa a usar essa conta na próxima mensagem.`,
-        'Recarregar janela',
-      )
-      .then((choice) => choice && vscode.commands.executeCommand('workbench.action.reloadWindow'));
+    vscode.window.showInformationMessage(`${prefix}Agora usando ${acc.label} (${acc.email}).`);
     sw.refreshUsage({ force: true, only: [id] }).then(app.render, (e) => log(`uso após troca: ${e.message}`));
   }
 

@@ -12,6 +12,7 @@ const { createActions } = require('./ui/actions');
 const { createAccountsView } = require('./ui/accountsView');
 const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
+const { createAutoSwitch } = require('./ui/autoSwitch');
 
 const MINUTE = 60 * 1000;
 
@@ -27,6 +28,7 @@ function activate(context) {
   // Shared by every UI module.
   const app = {
     paths,
+    switcherDir: dir,
     store,
     sw: new Switcher({ paths, store, switcherDir: dir, log }),
     log,
@@ -39,19 +41,25 @@ function activate(context) {
   const menu = createMenu(app, actions);
   const accountsView = createAccountsView(app);
   const statusBar = createStatusBar(app);
+  const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
 
   context.subscriptions.push(
     output,
     accountsView,
     statusBar,
+    autoSwitch,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),
     vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),
     vscode.commands.registerCommand('claudeSwitcher.refresh', () => tick({ force: true })),
+    vscode.commands.registerCommand('claudeSwitcher.toggleAutoSwitch', autoSwitch.toggle),
     vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
     vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
     vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
-    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('claudeSwitcher') && render()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('claudeSwitcher.autoSwitch')) autoSwitch.onConfigChanged();
+      else if (e.affectsConfiguration('claudeSwitcher')) render();
+    }),
   );
 
   function render() {

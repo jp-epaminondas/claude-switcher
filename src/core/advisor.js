@@ -48,6 +48,10 @@ function sessionCost(acc, accounts) {
   return costOf(five, week);
 }
 
+// Claude Code just reported this account at its limit and its usage hasn't been fetched since.
+const hitLimitUnchecked = (acc, now) =>
+  !!acc.limitHitAt && now - acc.limitHitAt < 5 * HOUR && !(acc.usage && acc.usage.fetchedAt > acc.limitHitAt);
+
 // Ranks accounts by which to use now: earliest weekly reset first. Whatever is left on that
 // account is thrown away at its reset, while the others keep their usage for later.
 function advise(data, now = Date.now(), { burnWindowHours = 24, minBurnPct = 10 } = {}) {
@@ -62,7 +66,7 @@ function advise(data, now = Date.now(), { burnWindowHours = 24, minBurnPct = 10 
     const hours = resetsAt ? (resetsAt - now) / HOUR : null;
     const cost = sessionCost(acc, data.accounts);
     const sessions = cost ? left / cost : null;
-    const available = !!acc.credentials && !acc.needsLogin && !outStatus(acc.usage, now).out;
+    const available = !!acc.credentials && !acc.needsLogin && !outStatus(acc.usage, now).out && !hitLimitUnchecked(acc, now);
     // Leftover the reset would throw away: the week renews soon, or more is left than you
     // could spend before then even using this account half of the time.
     const burn =

@@ -34,7 +34,7 @@ function createStatusBar(app) {
     if (othersOut) text += ` · $(clock) ${othersOut} fora`;
     item.text = text;
     item.backgroundColor = bg ? new vscode.ThemeColor(bg) : undefined;
-    item.tooltip = tooltip(data, advice, now);
+    item.tooltip = tooltip(data, advice, now, !!app.autoSwitch && app.autoSwitch.enabled());
     if (app.config().get('showStatusBar', true)) item.show();
     else item.hide();
   }
@@ -49,7 +49,7 @@ function createStatusBar(app) {
   return { update, showError, dispose: () => item.dispose() };
 }
 
-function tooltip(data, advice, now) {
+function tooltip(data, advice, now, autoSwitch) {
   const md = new vscode.MarkdownString('', true);
   if (!data.accounts.length) {
     md.appendMarkdown('Nenhuma conta salva ainda. Clique para adicionar.');
@@ -64,6 +64,7 @@ function tooltip(data, advice, now) {
     const flag = flags[flagOf(a, advice)] || '';
     md.appendMarkdown(`| $(${s.icon}) | ${flag}${escapeMd(a.label)} | ${fmtPct(u.five)} | ${fmtPct(u.week)} | ${s.situation} |\n`);
   }
+  if (autoSwitch) md.appendMarkdown('\n$(sync) Autoswitcher ligado: troca e continua sozinho quando a conta esgota.\n');
   md.appendMarkdown('\nClique para trocar de conta.');
   return md;
 }

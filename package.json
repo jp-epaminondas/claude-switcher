@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -14,6 +14,7 @@
   "main": "./src/extension.js",
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
+    "vscode:uninstall": "node ./src/hook/uninstall.js",
     "package": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && npx --yes @vscode/vsce package --allow-missing-repository --out dist/"
   },
   "activationEvents": [
@@ -151,6 +152,12 @@
         "title": "Atualizar uso",
         "category": "Claude Switcher",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeSwitcher.toggleAutoSwitch",
+        "title": "Ligar/desligar o autoswitcher",
+        "category": "Claude Switcher",
+        "icon": "$(sync)"
       }
     ],
     "configuration": {
@@ -165,7 +172,7 @@
         "claudeSwitcher.autoSwitch": {
           "type": "boolean",
           "default": false,
-          "description": "Trocar sozinho para a próxima conta disponível quando a conta em uso esgotar, sem esperar o clique."
+          "description": "Autoswitcher: quando a conta em uso esgota, troca sozinho para a próxima disponível e faz o Claude Code continuar a tarefa, sem precisar digitar \"continue\". Instala um hook StopFailure em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
         },
         "claudeSwitcher.notifyWhenBack": {
           "type": "boolean",

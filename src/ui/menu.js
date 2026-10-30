@@ -49,6 +49,9 @@ function createMenu(app, actions) {
           detail: next ? reason(next, now) : undefined,
           action: 'next',
         },
+        app.autoSwitch && app.autoSwitch.enabled()
+          ? { label: '$(sync) Desligar autoswitcher', description: 'ligado: troca e continua sozinho', action: 'auto' }
+          : { label: '$(sync-ignored) Ligar autoswitcher', description: 'troca e continua sozinho quando a conta esgota', action: 'auto' },
         { label: '$(add) Adicionar conta…', action: 'add' },
         { label: '$(refresh) Atualizar uso agora', action: 'refresh' },
       ];
@@ -69,6 +72,7 @@ function createMenu(app, actions) {
       qp.hide();
       if (!item) return;
       if (item.action === 'next') actions.switchNext();
+      else if (item.action === 'auto') app.autoSwitch.toggle();
       else if (item.action === 'add') actions.addAccount();
       else if (item.action === 'refresh') app.tick({ force: true });
       else if (item.account) actions.pickAccount(item.account);
