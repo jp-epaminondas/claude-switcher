@@ -80,7 +80,10 @@ test('settings.json: hook added and removed, the rest left alone', async () => {
   assert.equal(await syncHook(t.paths, dir, { enabled: true, nodePath: 'C:/node/node.exe' }), true);
   const on = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(on.model, 'opus');
-  assert.deepEqual(on.hooks.Stop, original.hooks.Stop);
+  assert.deepEqual(on.hooks.Stop[0], original.hooks.Stop[0], "the user's own Stop hook stays first");
+  assert.deepEqual(on.hooks.Stop[1], {
+    hooks: [{ type: 'command', command: 'C:/node/node.exe', args: [path.join(dir, 'limit-hook.js')], async: true, timeout: 30 }],
+  });
   assert.deepEqual(on.hooks.StopFailure[0], userHook);
   assert.deepEqual(on.hooks.StopFailure[1], {
     matcher: 'rate_limit',
@@ -166,4 +169,39 @@ test('hook: resumes the session with exit 2 when the extension says so', async (
   const other = await runHook(dir, { ...hook, error: 'overloaded' });
   assert.equal(other.code, 0, 'only usage limits');
   assert.deepEqual(queue.take(), []);
+
+  // The end of a normal turn is only reported; the hook doesn't wait for anything.
+  const started = Date.now();
+  const turn = await runHook(dir, { session_id: 'sess-1', hook_event_name: 'Stop' });
+  assert.deepEqual(turn, { code: 0, stderr: '' });
+  assert.ok(Date.now() - started < 5000);
+  const turns = queue.takeTurns();
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].sessionId, 'sess-1');
+  assert.deepEqual(queue.takeTurns(), [], 'taken once');
+});
+
+test('at the end of a turn, an account at 99% hands over to the next one', async () => {
+  const t = await threeAccounts();
+  const soon = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
+  const usage = (five, week = 10) => ({ five_hour: { utilization: five, resets_at: soon }, seven_day: { utilization: week, resets_at: soon } });
+
+  t.api.usage.A = usage(98);
+  await t.sw.refreshUsage({ force: true });
+  assert.equal(await t.sw.onTurnEnd({ threshold: 99 }), null, 'below the threshold');
+
+  t.api.usage.A = usage(99);
+  t.api.usage.B = usage(99);
+  t.api.usage.C = usage(99);
+  await t.sw.refreshUsage({ force: true });
+  assert.equal(await t.sw.onTurnEnd({ threshold: 99 }), null, 'no point moving to an account just as full');
+  assert.equal(liveAccount(t), 'A');
+
+  t.api.usage.B = usage(20);
+  t.api.usage.C = usage(5, 99); // the week counts too
+  await t.sw.refreshUsage({ force: true });
+  const r = await t.sw.onTurnEnd({ threshold: 99 });
+  assert.equal(r.from.id, 'uuid-A');
+  assert.equal(r.account.id, 'uuid-B');
+  assert.equal(liveAccount(t), 'B');
 });

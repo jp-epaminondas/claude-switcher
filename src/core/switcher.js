@@ -2,7 +2,7 @@
 
 const defaultApi = require('./api');
 const files = require('./claudeFiles');
-const { normalizeUsage, outStatus } = require('./usage');
+const { normalizeUsage, outStatus, effectivePct } = require('./usage');
 const { advise, learnSessionCost } = require('./advisor');
 const { learnDemand, workedFor } = require('./demand');
 
@@ -197,6 +197,26 @@ class Switcher {
         record(r.account);
         return { resume: true, switched: true, from: current, account: r.account };
       }
+    });
+  }
+
+  // A turn just ended (Stop hook). When the account in use has reached `threshold` % of its 5h
+  // or weekly limit, move on now, between two messages, rather than let the next turn run into
+  // the limit. Nothing happens when the next account is just as full.
+  async onTurnEnd({ threshold = 99 } = {}) {
+    return this.store.update(async (data) => {
+      const now = Date.now();
+      this.absorbLive(data, await this.identifyLive(data), { trustGuess: true });
+      const full = (acc) => {
+        const u = acc.usage || {};
+        return Math.max(effectivePct(u.fiveHour, now) || 0, effectivePct(u.sevenDay, now) || 0) >= threshold;
+      };
+      const current = find(data, data.activeId);
+      if (!current || !full(current)) return null;
+      const next = this.pickNext(data, now);
+      if (!next || full(next)) return null;
+      const r = await this.switchIn(data, next.id);
+      return r.switched ? { from: current, account: r.account } : null;
     });
   }
 

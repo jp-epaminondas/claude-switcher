@@ -6,9 +6,9 @@ const { writeFileAtomic } = require('./fsutil');
 
 const LEFTOVER_MS = 5 * 60 * 1000;
 
-// Mailbox shared with the StopFailure hook (src/hook/limit-hook.js): the hook drops
-// "<id>.req" and waits for "<id>.res". The hook only asks while .alive is fresh, that is,
-// while some VS Code window is listening.
+// Mailbox shared with the hook (src/hook/limit-hook.js): on a limit it drops "<id>.req" and
+// waits for "<id>.res"; at the end of a turn it drops "<id>.turn". The hook only writes while
+// .alive is fresh, that is, while some VS Code window is listening.
 class LimitQueue {
   constructor(switcherDir) {
     this.dir = path.join(switcherDir, 'limits');
@@ -56,6 +56,28 @@ class LimitQueue {
         fs.unlinkSync(claimed);
       } catch {}
       if (req) out.push({ id, req });
+    }
+    return out;
+  }
+
+  // Turns that ended since the last call, as reported by the Stop hook.
+  takeTurns() {
+    let names;
+    try {
+      names = fs.readdirSync(this.dir);
+    } catch {
+      return [];
+    }
+    const out = [];
+    for (const name of names) {
+      if (!name.endsWith('.turn')) continue;
+      const file = path.join(this.dir, name);
+      try {
+        out.push(JSON.parse(fs.readFileSync(file, 'utf8')));
+      } catch {}
+      try {
+        fs.unlinkSync(file);
+      } catch {}
     }
     return out;
   }

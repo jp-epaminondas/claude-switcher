@@ -29,11 +29,13 @@ Com o autoswitcher ligado, quando a conta em uso esgota no meio de uma tarefa, o
 Para ligar, clique em **Autoswitcher** no fim do painel Contas, ou use o menu da barra de status, ou o comando "Ligar/desligar o autoswitcher". O item mostra `ligado` ou `desligado`. Vale para as conversas já abertas, sem reabrir nada.
 
 Como funciona:
-- Ao ligar, a extensão instala um hook `StopFailure` em `~/.claude/settings.json`. Ao desligar, remove o hook e deixa o resto do arquivo como estava. O hook precisa do Node.js instalado.
-- Quando um turno para por limite de uso, o Claude Code roda o hook. Ele avisa a extensão, que troca para a próxima conta na mesma ordem do ⭐.
+- **Troca antecipada:** ao fim de cada resposta do Claude, o switcher confere o uso da conta. Se ela chegou a 99% da janela de 5h ou da semana, ele já troca, e a próxima mensagem vai pela conta nova. Assim o limite nem chega a cortar uma resposta, e a troca entre mensagens também gasta menos, porque o cache do prompt se perde em toda troca. Ajuste em `claudeSwitcher.switchAtPercent`; 100 desliga.
+- Ao ligar, a extensão instala dois hooks em `~/.claude/settings.json`: `Stop`, para o fim de cada resposta, e `StopFailure`, para quando o limite estoura. Ao desligar, remove os dois e deixa o resto do arquivo como estava. Os hooks precisam do Node.js instalado.
+- Quando um turno para por limite de uso, o Claude Code roda o hook `StopFailure`. Ele avisa a extensão, que troca para a próxima conta na mesma ordem do ⭐.
 - Em seguida o hook libera o Claude Code, que manda ao modelo uma mensagem dizendo que a conta foi trocada e que ele deve continuar de onde parou. Na conversa ela aparece como "Stop hook feedback".
 - Se várias conversas batem no limite ao mesmo tempo, a troca acontece uma vez só e todas continuam na conta nova.
 - Se não houver outra conta disponível, a conversa fica parada e aparece um aviso dizendo qual conta volta primeiro. Se a mesma conversa bater no limite em várias contas seguidas, o switcher para de continuar sozinho.
+- Se o limite estourar no meio de uma resposta mesmo assim, entra a troca com "continue" descrita acima.
 - O autoswitcher também troca de conta quando a consulta de uso mostra que a conta em uso esgotou antes de alguma conversa bater no limite.
 - O hook só age enquanto alguma janela do VS Code com o switcher estiver aberta. Ele vale também para o `claude` rodando no terminal.
 
@@ -107,6 +109,7 @@ A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoj
 | Configuração | Padrão | O que faz |
 |---|---|---|
 | `claudeSwitcher.autoSwitch` | `false` | Autoswitcher: troca sozinho quando a conta em uso esgota e o Claude continua a tarefa |
+| `claudeSwitcher.switchAtPercent` | `99` | Com o autoswitcher ligado, troca no fim de uma resposta quando a conta chega a esta % (100 desliga) |
 | `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
 | `claudeSwitcher.notifyPace` | `true` | Avisos da previsão: pausa, todas as contas para esgotar, contas que não aguentam |
 | `claudeSwitcher.pollIntervalMinutes` | `3` | Intervalo, em minutos, entre consultas de uso da conta em uso |
@@ -150,7 +153,7 @@ src/
     fsutil.js        escrita atômica e lock
     paths.js         onde ficam os arquivos
   hook/
-    limit-hook.js    roda dentro do Claude Code quando o limite estoura (copiado para ~/.claude-switcher/)
+    limit-hook.js    roda dentro do Claude Code no fim de cada resposta e quando o limite estoura (copiado para ~/.claude-switcher/)
     uninstall.js     tira o hook do settings.json quando a extensão é desinstalada
   ui/                tudo que aparece no VS Code
     accountsView.js  painel da barra lateral
@@ -166,7 +169,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.5.0.vsix
+code --install-extension dist/claude-switcher-0.6.0.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

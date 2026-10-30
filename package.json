@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -173,6 +173,13 @@
           "type": "boolean",
           "default": false,
           "description": "Autoswitcher: quando a conta em uso esgota, troca sozinho para a próxima disponível e faz o Claude Code continuar a tarefa, sem precisar digitar \"continue\". Instala um hook StopFailure em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
+        },
+        "claudeSwitcher.switchAtPercent": {
+          "type": "number",
+          "default": 99,
+          "minimum": 50,
+          "maximum": 100,
+          "description": "Com o autoswitcher ligado, troca de conta no fim de uma resposta quando a conta em uso chega a esta % do limite de 5h ou da semana. Assim a próxima mensagem já vai pela conta nova, em vez de ser cortada no limite. 100 desliga essa troca antecipada e ele só troca quando a conta esgota."
         },
         "claudeSwitcher.maxWaitMinutes": {
           "type": "number",

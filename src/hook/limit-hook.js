@@ -1,9 +1,12 @@
 'use strict';
 
-// Claude Code runs this when a turn stops on the usage limit (StopFailure hook, matcher
-// "rate_limit", asyncRewake). It asks the Claude Switcher extension to move to the next
-// account and waits for the answer. Exit code 2 makes Claude Code wake the model with stderr
-// as a new message, so the task carries on; exit 0 leaves the session stopped.
+// Claude Code runs this on two hooks:
+// - StopFailure (matcher "rate_limit", asyncRewake): a turn stopped on the usage limit. It
+//   asks the Claude Switcher extension to move to the next account and waits for the answer.
+//   Exit code 2 makes Claude Code wake the model with stderr as a new message, so the task
+//   carries on; exit 0 leaves the session stopped.
+// - Stop (async): a turn ended normally. It only tells the extension, which can switch
+//   accounts between two messages when the one in use is almost full.
 //
 // The extension copies this file next to accounts.json, so it must not require anything else.
 const fs = require('fs');
@@ -56,6 +59,12 @@ function ask(hook) {
   }, POLL_MS);
 }
 
+function turnEnded(hook) {
+  const file = path.join(dir, `${Date.now()}-${process.pid}.turn`);
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify({ sessionId: hook.session_id || null, at: Date.now() }));
+  fs.renameSync(`${file}.tmp`, file);
+}
+
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => (input += chunk));
@@ -67,6 +76,7 @@ process.stdin.on('end', () => {
   if (hook.error && hook.error !== 'rate_limit') return;
   if (!listening()) return; // no VS Code window with the switcher open
   try {
-    ask(hook);
+    if (hook.hook_event_name === 'Stop') turnEnded(hook);
+    else ask(hook);
   } catch {}
 });

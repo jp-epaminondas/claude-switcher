@@ -191,6 +191,8 @@ function autoSwitchItem(auto) {
   md.appendMarkdown(
     'Quando a conta em uso esgota, o switcher troca para a próxima disponível e o Claude Code continua a tarefa sozinho, sem precisar digitar "continue".\n\n',
   );
+  const at = auto ? auto.threshold() : 99;
+  if (at < 100) md.appendMarkdown(`Antes disso, quando a conta chega a ${at}%, ele já troca no fim de uma resposta, e a próxima mensagem vai pela conta nova.\n\n`);
   if (problem) md.appendMarkdown(`$(warning) A troca é automática, mas o Claude não continua sozinho: ${escapeMd(problem)}.\n\n`);
   md.appendMarkdown(on ? '_Clique para desligar._' : '_Clique para ligar._');
   item.tooltip = md;

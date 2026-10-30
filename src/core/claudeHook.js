@@ -26,7 +26,7 @@ function findNode(env = process.env, platform = process.platform) {
   return null;
 }
 
-// Puts the autoswitcher's StopFailure hook into Claude Code's user settings, or takes it out,
+// Puts the autoswitcher's hooks into Claude Code's user settings, or takes them out,
 // leaving the rest of the file as it was. Claude Code picks the change up in open sessions
 // too. Returns true when settings.json changed.
 async function syncHook(paths, switcherDir, { enabled, nodePath = null }) {
@@ -53,20 +53,23 @@ async function syncHook(paths, switcherDir, { enabled, nodePath = null }) {
   }
 
   const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
-  const groups = [];
-  for (const g of Array.isArray(hooks.StopFailure) ? hooks.StopFailure : []) {
-    const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h)) : null;
-    if (kept && !kept.length && g.hooks.length) continue; // it held only ours
-    groups.push(kept ? { ...g, hooks: kept } : g);
+  const ours = {
+    // A turn stopped on the usage limit: switch, then wake the model so it carries on.
+    StopFailure: { matcher: 'rate_limit', hooks: [{ type: 'command', command: nodePath, args: [script], asyncRewake: true, timeout: 120 }] },
+    // A turn ended normally: a chance to switch between two messages.
+    Stop: { hooks: [{ type: 'command', command: nodePath, args: [script], async: true, timeout: 30 }] },
+  };
+  for (const event of Object.keys(ours)) {
+    const groups = [];
+    for (const g of Array.isArray(hooks[event]) ? hooks[event] : []) {
+      const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h)) : null;
+      if (kept && !kept.length && g.hooks.length) continue; // it held only ours
+      groups.push(kept ? { ...g, hooks: kept } : g);
+    }
+    if (enabled) groups.push(ours[event]);
+    if (groups.length) hooks[event] = groups;
+    else delete hooks[event];
   }
-  if (enabled) {
-    groups.push({
-      matcher: 'rate_limit',
-      hooks: [{ type: 'command', command: nodePath, args: [script], asyncRewake: true, timeout: 120 }],
-    });
-  }
-  if (groups.length) hooks.StopFailure = groups;
-  else delete hooks.StopFailure;
   if (Object.keys(hooks).length) settings.hooks = hooks;
   else delete settings.hooks;
 
