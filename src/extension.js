@@ -17,6 +17,7 @@ const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
 const { createAutoSwitch } = require('./ui/autoSwitch');
 const { createMemoriesView } = require('./ui/memoriesView');
+const { createCredentialsView } = require('./ui/credentialsView');
 
 const MINUTE = 60 * 1000;
 
@@ -63,6 +64,7 @@ function activate(context) {
   const statusBar = createStatusBar(app);
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
   const memoriesView = createMemoriesView(app, sidebar);
+  const credentialsView = createCredentialsView(app, sidebar);
 
   context.subscriptions.push(
     output,
@@ -70,6 +72,7 @@ function activate(context) {
     statusBar,
     autoSwitch,
     memoriesView,
+    credentialsView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),
     vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),

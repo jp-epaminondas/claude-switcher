@@ -8,7 +8,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem duas páginas, uma de cada vez: **Contas** e **Memórias**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
+- O painel tem três páginas, uma de cada vez: **Contas**, **Memórias** e **Credenciais**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
 - No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -120,6 +120,28 @@ CLAUDE.md global                              3 itens
 - Clique numa memória ou num item para abri-lo no editor.
 - Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/`: as memórias apagadas e as últimas 20 versões do `CLAUDE.md`.
 
+### Credenciais: senhas que o Claude usa sem ver
+
+A página **Credenciais** (no menu **…** do painel) é um cofre criptografado para senhas, chaves e tokens, como os do `server.md`. O Claude usa os valores nos comandos sem nunca vê-los.
+
+- **Cofre:** fica em `~/.claude-switcher/credenciais.vault`, criptografado com AES-256-GCM. A chave sai da sua **senha mestra** pelo scrypt, e a senha mestra não fica guardada em lugar nenhum: sem ela, o cofre não abre. Os nomes das credenciais e dos campos ficam visíveis; os valores, não.
+- **Trancado e destrancado:** a senha mestra destranca por 60 min (`claudeSwitcher.credentials.lockMinutes`), em todas as janelas do VS Code ao mesmo tempo. Depois o cofre tranca sozinho. O cadeado no título tranca na hora.
+- **Importar:** o botão de importar lê um arquivo como o `server.md` (um título, depois um valor por linha), dá nome a cada valor pelo formato (Host, Usuário, Senha, Chave…) e no fim oferece apagar o original.
+- **Na lista:** clique num campo para copiar o valor, que some da área de transferência em 30 s. Os botões editam, renomeiam e apagam. Campos não secretos (host, usuário, caminho) mostram o valor quando o cofre está destrancado.
+
+**Como o Claude usa:** pelo `segredo`, que a extensão instala em `~/.claude-switcher/segredo.js`:
+
+```sh
+node ~/.claude-switcher/segredo.js lista        # nomes, nunca valores
+node ~/.claude-switcher/segredo.js exec -- plink -batch -pwfile {{arquivo:server-ssh.senha}} root@host "uptime"
+node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysql -u master ...
+```
+
+- `{{credencial.campo}}` vira o valor, e `{{arquivo:credencial.campo}}` vira um arquivo temporário com o valor, apagado no fim. `--env` põe o valor numa variável de ambiente.
+- Se o cofre estiver trancado, o VS Code mostra qual comando quer qual credencial e pede a senha mestra. Se você negar, o comando não roda.
+- O que o comando imprime passa por uma máscara: se um valor aparecer, sai como `••••`. O comando que aparece na conversa só tem a referência, nunca o valor.
+- A página mostra os últimos usos (qual credencial, qual comando, quando).
+
 ### Adicionar as contas
 
 1. Na primeira vez, a conta que já está logada é salva sozinha como **Conta 1**.
@@ -141,6 +163,7 @@ CLAUDE.md global                              3 itens
 | `claudeSwitcher.burnWindowHours` | `24` | Quantas horas antes da renovação semanal uma conta com saldo ganha 🔥 |
 | `claudeSwitcher.notifyBurn` | `true` | Avisa quando a conta recomendada tem uso prestes a vencer |
 | `claudeSwitcher.showStatusBar` | `true` | Também mostra a conta em uso na barra de status |
+| `claudeSwitcher.credentials.lockMinutes` | `60` | Minutos que o cofre de credenciais fica destrancado depois da senha mestra |
 
 ## Como funciona
 
@@ -173,6 +196,9 @@ src/
     memories.js      lê as memórias dos projetos, edita o MEMORY.md e monta a análise
     claudeMd.js      o CLAUDE.md global em seções e itens; adiciona e remove regras
     claudeCli.js     pergunta ao Claude pelo `claude -p`, com resposta em JSON
+    vault.js         cofre de credenciais criptografado (AES-256-GCM + scrypt)
+    secretBus.js     canal local entre o segredo e as janelas do VS Code
+    serverMd.js      importa um arquivo de credenciais em texto (como o server.md)
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
@@ -184,10 +210,12 @@ src/
   hook/
     limit-hook.js    roda dentro do Claude Code no fim de cada resposta e quando o limite estoura (copiado para ~/.claude-switcher/)
     uninstall.js     tira o hook do settings.json quando a extensão é desinstalada
+    segredo.js       o comando que o Claude usa para rodar algo com uma credencial (copiado para ~/.claude-switcher/)
   ui/                tudo que aparece no VS Code
     sidebar.js       o painel da barra lateral, uma página de cada vez
     accountsView.js  página Contas
     memoriesView.js  página Memórias
+    credentialsView.js  página Credenciais
     statusBar.js     indicador na barra de status
     menu.js          menu rápido
     actions.js       trocar, adicionar, renomear, remover e as notificações
@@ -200,7 +228,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.8.4.vsix
+code --install-extension dist/claude-switcher-0.9.0.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

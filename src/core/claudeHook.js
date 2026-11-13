@@ -87,4 +87,4 @@ function copyIfChanged(from, to) {
   fs.writeFileSync(to, text, 'utf8');
 }
 
-module.exports = { syncHook, findNode, settingsFile };
+module.exports = { syncHook, findNode, settingsFile, copyIfChanged };

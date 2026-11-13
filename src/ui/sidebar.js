@@ -69,11 +69,15 @@ function createSidebar() {
     view,
     changed,
     view.onDidChangeVisibility((e) => e.visible && current && current.onShow()),
-    vscode.commands.registerCommand('claudeSwitcher.showAccounts', () => focus('accounts')),
-    vscode.commands.registerCommand('claudeSwitcher.showMemories', () => focus('memories')),
-    // The ✓ entries of the page menu: the page already on screen.
-    vscode.commands.registerCommand('claudeSwitcher.showAccountsCurrent', () => focus('accounts')),
-    vscode.commands.registerCommand('claudeSwitcher.showMemoriesCurrent', () => focus('memories')),
+    // Each page twice: plain, and with ✓ for the "…" menu while it is the page on screen.
+    ...[
+      ['Accounts', 'accounts'],
+      ['Memories', 'memories'],
+      ['Credentials', 'credentials'],
+    ].flatMap(([cmd, name]) => [
+      vscode.commands.registerCommand(`claudeSwitcher.show${cmd}`, () => focus(name)),
+      vscode.commands.registerCommand(`claudeSwitcher.show${cmd}Current`, () => focus(name)),
+    ]),
   ];
 
   return {

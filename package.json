@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.8.4",
+  "version": "0.9.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -49,12 +49,12 @@
       "view/title": [
         {
           "command": "claudeSwitcher.showAccounts",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != accounts",
           "group": "0_pages@1"
         },
         {
           "command": "claudeSwitcher.showAccountsCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts",
           "group": "0_pages@1"
         },
         {
@@ -68,13 +68,23 @@
           "group": "0_pages@2"
         },
         {
+          "command": "claudeSwitcher.showCredentials",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != credentials",
+          "group": "0_pages@3"
+        },
+        {
+          "command": "claudeSwitcher.showCredentialsCurrent",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials",
+          "group": "0_pages@3"
+        },
+        {
           "command": "claudeSwitcher.addAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts",
           "group": "navigation@2"
         },
         {
           "command": "claudeSwitcher.refresh",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts",
           "group": "navigation@3"
         },
         {
@@ -86,32 +96,57 @@
           "command": "claudeSwitcher.memories.analyze",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
           "group": "navigation@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.addEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.import",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.lock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultUnlocked",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.unlock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists && !claudeSwitcher.vaultUnlocked",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.changeMaster",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
+          "group": "1_vault@1"
         }
       ],
       "view/item/context": [
         {
           "command": "claudeSwitcher.renameAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && viewItem =~ /^account/",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.removeAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && viewItem =~ /^account/",
           "group": "inline@2"
         },
         {
           "command": "claudeSwitcher.useAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem == account",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && viewItem == account",
           "group": "1_account@1"
         },
         {
           "command": "claudeSwitcher.renameAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && viewItem =~ /^account/",
           "group": "1_account@2"
         },
         {
           "command": "claudeSwitcher.removeAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && viewItem =~ /^account/",
           "group": "1_account@3"
         },
         {
@@ -148,6 +183,81 @@
           "command": "claudeSwitcher.memories.openClaudeMd",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == claudeMdRoot",
           "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.addField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.renameEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "inline@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.addField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "1_cred@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.renameEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "1_cred@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "1_cred@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.copy",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.editField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "inline@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.copy",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.copyRef",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.editField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.renameField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@4"
+        },
+        {
+          "command": "claudeSwitcher.cred.toggleSecret",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@5"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "group": "1_cred@6"
         }
       ],
       "commandPalette": [
@@ -185,6 +295,46 @@
         },
         {
           "command": "claudeSwitcher.showMemoriesCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.showCredentialsCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.addField",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.editField",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.renameEntry",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.renameField",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.toggleSecret",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeEntry",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeField",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.copy",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.copyRef",
           "when": "false"
         }
       ]
@@ -276,14 +426,7 @@
       {
         "command": "claudeSwitcher.showAccounts",
         "title": "Contas",
-        "category": "Claude Switcher",
-        "icon": "$(account)"
-      },
-      {
-        "command": "claudeSwitcher.showMemories",
-        "title": "Memórias",
-        "category": "Claude Switcher",
-        "icon": "$(book)"
+        "category": "Claude Switcher"
       },
       {
         "command": "claudeSwitcher.showAccountsCurrent",
@@ -291,8 +434,109 @@
         "category": "Claude Switcher"
       },
       {
+        "command": "claudeSwitcher.showMemories",
+        "title": "Memórias",
+        "category": "Claude Switcher"
+      },
+      {
         "command": "claudeSwitcher.showMemoriesCurrent",
         "title": "✓ Memórias",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showCredentials",
+        "title": "Credenciais",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showCredentialsCurrent",
+        "title": "✓ Credenciais",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.create",
+        "title": "Criar o cofre de credenciais",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.cred.unlock",
+        "title": "Destrancar as credenciais",
+        "category": "Claude Switcher",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "claudeSwitcher.cred.lock",
+        "title": "Trancar as credenciais",
+        "category": "Claude Switcher",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "claudeSwitcher.cred.import",
+        "title": "Importar arquivo de credenciais",
+        "category": "Claude Switcher",
+        "icon": "$(desktop-download)"
+      },
+      {
+        "command": "claudeSwitcher.cred.addEntry",
+        "title": "Nova credencial",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.cred.addField",
+        "title": "Novo campo",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.cred.editField",
+        "title": "Trocar o valor",
+        "category": "Claude Switcher",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "claudeSwitcher.cred.renameEntry",
+        "title": "Renomear",
+        "category": "Claude Switcher",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "claudeSwitcher.cred.renameField",
+        "title": "Renomear o campo",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.toggleSecret",
+        "title": "Alternar secreto / não secreto",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.removeEntry",
+        "title": "Apagar a credencial",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.cred.removeField",
+        "title": "Apagar o campo",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.cred.copy",
+        "title": "Copiar o valor",
+        "category": "Claude Switcher",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "claudeSwitcher.cred.copyRef",
+        "title": "Copiar a referência para o segredo",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.changeMaster",
+        "title": "Trocar a senha mestra",
         "category": "Claude Switcher"
       }
     ],
@@ -348,6 +592,13 @@
           "type": "boolean",
           "default": true,
           "description": "Mostrar a conta em uso também na barra de status (lado esquerdo)."
+        },
+        "claudeSwitcher.credentials.lockMinutes": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 720,
+          "description": "Por quantos minutos o cofre de credenciais fica destrancado depois da senha mestra. Depois disso ele tranca sozinho, em todas as janelas."
         }
       }
     }
