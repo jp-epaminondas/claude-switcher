@@ -239,8 +239,8 @@ test('a new instruction: Claude words it, it lands in its section, replacing wha
   const prompts = [];
   w.curator.run = async ({ prompt, schema }) => {
     prompts.push(prompt);
-    assert.deepEqual(schema.required, ['rule', 'section', 'replaces', 'projectOnly', 'note']);
-    return { rule: '- Responda sempre em português do Brasil.', section: '# preferências', replaces: 'Responder em inglês.', projectOnly: false, note: 'Troca a regra do idioma.' };
+    assert.deepEqual(schema.required, ['rule', 'section', 'replaces', 'wrongScope', 'note']);
+    return { rule: '- Responda sempre em português do Brasil.', section: '# preferências', replaces: 'Responder em inglês.', wrongScope: false, note: 'Troca a regra do idioma.' };
   };
   const draft = await w.curator.draftInstruction('quero respostas em português');
   assert.ok(prompts[0].includes('quero respostas em português') && prompts[0].includes('- Responder em inglês.'));
@@ -249,7 +249,7 @@ test('a new instruction: Claude words it, it lands in its section, replacing wha
     section: 'Preferências', // the existing title, as written in the file
     newSection: false,
     replaces: 'Responder em inglês.',
-    projectOnly: false,
+    wrongScope: false,
     note: 'Troca a regra do idioma.',
   });
   const done = await w.curator.addInstruction(draft);
@@ -261,10 +261,57 @@ test('a new instruction: Claude words it, it lands in its section, replacing wha
   await assert.rejects(w.curator.undoInstruction(done), /mudou/);
 
   // A section that doesn't exist yet is created; a "replaces" that isn't in the file is ignored.
-  w.curator.run = async () => ({ rule: 'Antes de deploy, conferir commits pendentes.', section: 'Deploy', replaces: 'não existe', projectOnly: true, note: '' });
+  w.curator.run = async () => ({ rule: 'Antes de deploy, conferir commits pendentes.', section: 'Deploy', replaces: 'não existe', wrongScope: true, note: '' });
   const d2 = await w.curator.draftInstruction('deploy');
   assert.equal(d2.newSection, true);
   assert.equal(d2.replaces, null);
   await w.curator.addInstruction(d2);
   assert.ok(w.claudeMd().endsWith('# Deploy\n\n- Antes de deploy, conferir commits pendentes.\n'));
+});
+
+test('the open project: its CLAUDE.md files and memories, edited and undone', async () => {
+  const w = world();
+  const root = path.join(w.t.root, 'work', 'alpha');
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
+  // Claude Code names the memory folder after the path; here that folder is C--work-alpha,
+  // so point the project at it through projectDirFor's case-insensitive match.
+  const dirName = mem.encodeProject(root);
+  fs.renameSync(path.join(mem.projectsDir(w.t.paths), 'C--work-alpha'), path.join(mem.projectsDir(w.t.paths), dirName));
+
+  let p = w.curator.projectView(root);
+  assert.equal(p.label, 'alpha');
+  assert.deepEqual(p.files.map((f) => f.exists), [false, false]);
+  assert.equal(p.target, path.join(root, 'CLAUDE.md'), 'new instructions create the root CLAUDE.md');
+  assert.deepEqual(p.memories.map((m) => m.name).sort(), ['deploy', 'no-coauthor']);
+
+  fs.writeFileSync(path.join(root, '.claude', 'CLAUDE.md'), '# Testes\n\n- Rodar npm test.\n');
+  p = w.curator.projectView(root);
+  assert.equal(p.target, path.join(root, '.claude', 'CLAUDE.md'), 'or the one that exists');
+
+  // Nova instrução do projeto: the prompt says which project, and it lands in that file.
+  const target = { file: p.target, label: p.label };
+  w.curator.run = async ({ prompt, system }) => {
+    assert.match(system, /projeto "alpha"/);
+    assert.match(prompt, /CLAUDE\.md do projeto alpha atual/);
+    return { rule: 'Rodar npm run lint antes de commitar.', section: 'Testes', replaces: '', wrongScope: false, note: '' };
+  };
+  const draft = await w.curator.draftInstruction('lint antes do commit', target);
+  const done = await w.curator.addInstruction(draft, target);
+  assert.equal(fs.readFileSync(p.target, 'utf8'), '# Testes\n\n- Rodar npm test.\n- Rodar npm run lint antes de commitar.\n');
+  await w.curator.undoInstruction(done);
+  assert.equal(fs.readFileSync(p.target, 'utf8'), '# Testes\n\n- Rodar npm test.\n');
+
+  const item = md.parseClaudeMd(fs.readFileSync(p.target, 'utf8')).blocks.find((b) => b.kind === 'item');
+  await w.curator.removeFromFile(p.target, md.refOf(item));
+  assert.equal(fs.readFileSync(p.target, 'utf8'), '# Testes\n');
+
+  // A memory goes, with its line in MEMORY.md, and comes back.
+  const deploy = p.memories.find((m) => m.name === 'deploy');
+  const index = path.join(path.dirname(deploy.file), 'MEMORY.md');
+  const saved = await w.curator.deleteMemory(deploy.id);
+  assert.equal(fs.existsSync(deploy.file), false);
+  assert.ok(!fs.readFileSync(index, 'utf8').includes('deploy.md'));
+  await assert.rejects(w.curator.deleteMemory(deploy.id), /não existe mais/);
+  await w.curator.restoreMemory(saved);
+  assert.ok(fs.existsSync(deploy.file) && fs.readFileSync(index, 'utf8').includes('deploy.md'));
 });

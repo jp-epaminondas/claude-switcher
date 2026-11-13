@@ -1,6 +1,6 @@
 'use strict';
 
-// The global CLAUDE.md as removable pieces: sections (headings, with everything under them)
+// A CLAUDE.md (the global one or a project's) as removable pieces: sections (headings, with everything under them)
 // and items (a list item with its continuation, a paragraph, a code block). Rules joined from
 // the project memories go in a "Preferências" section.
 const fs = require('fs');
@@ -16,20 +16,25 @@ const blank = (l) => !l || !l.trim();
 
 const claudeMdPath = (paths) => path.join(paths.configDir, 'CLAUDE.md');
 
-function readClaudeMd(paths) {
+// A project's instruction files, in the order Claude Code reads them.
+const projectMdPaths = (root) => [path.join(root, 'CLAUDE.md'), path.join(root, '.claude', 'CLAUDE.md')];
+
+function readMd(file) {
   try {
-    return fs.readFileSync(claudeMdPath(paths), 'utf8');
+    return fs.readFileSync(file, 'utf8');
   } catch (e) {
     if (e.code === 'ENOENT') return '';
     throw e;
   }
 }
 
-// Keeps a copy of what is being replaced, then writes.
-async function writeClaudeMd(paths, switcherDir, text) {
-  const file = claudeMdPath(paths);
+const readClaudeMd = (paths) => readMd(claudeMdPath(paths));
+
+// Keeps a copy of what is being replaced (the last KEEP_BACKUPS per file), then writes. The
+// global file's copies go in memory-backup/CLAUDE.md, a project file's in a folder named after it.
+async function writeMd(file, switcherDir, text, backupName = file.replace(/[^A-Za-z0-9]+/g, '-')) {
   if (fs.existsSync(file)) {
-    const dir = path.join(switcherDir, 'memory-backup', 'CLAUDE.md');
+    const dir = path.join(switcherDir, 'memory-backup', backupName);
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(file, path.join(dir, `${stamp()}.md`));
     const old = fs.readdirSync(dir).sort();
@@ -37,6 +42,8 @@ async function writeClaudeMd(paths, switcherDir, text) {
   }
   await writeFileAtomic(file, text);
 }
+
+const writeClaudeMd = (paths, switcherDir, text) => writeMd(claudeMdPath(paths), switcherDir, text, 'CLAUDE.md');
 
 const stamp = (t = Date.now()) => new Date(t).toISOString().replace(/[:.]/g, '-');
 
@@ -188,6 +195,9 @@ module.exports = {
   PREFS_TITLE,
   findItem,
   claudeMdPath,
+  projectMdPaths,
+  readMd,
+  writeMd,
   readClaudeMd,
   writeClaudeMd,
   parseClaudeMd,

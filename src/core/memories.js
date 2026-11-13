@@ -97,8 +97,20 @@ function parseFrontmatter(text) {
   return { meta, body: text.slice(m[0].length).trim() };
 }
 
-// Every memory of every project. `id` is the path under projects/, with forward slashes.
-function scanMemories(paths) {
+// The folder under projects/ that Claude Code uses for a project path. Windows paths come with
+// either drive letter case, so an existing folder is matched without case.
+function projectDirFor(paths, root) {
+  const want = encodeProject(root);
+  try {
+    const hit = fs.readdirSync(projectsDir(paths)).find((n) => n.toLowerCase() === want.toLowerCase());
+    if (hit) return hit;
+  } catch {}
+  return want;
+}
+
+// Every memory of every project, or of one (`project`: its folder name). `id` is the path
+// under projects/, with forward slashes.
+function scanMemories(paths, { project = null } = {}) {
   const root = projectsDir(paths);
   const real = projectPaths(paths);
   const out = [];
@@ -106,7 +118,7 @@ function scanMemories(paths) {
   try {
     dirs = fs
       .readdirSync(root, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
+      .filter((d) => d.isDirectory() && (!project || d.name === project))
       .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return out;
@@ -306,6 +318,7 @@ function validateGroups(out, memories) {
 
 module.exports = {
   scanMemories,
+  projectDirFor,
   isPreference,
   inputHash,
   unlinkFromIndex,

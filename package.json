@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -273,6 +273,31 @@
           "command": "claudeSwitcher.cred.hide",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credFieldSecret.revealed",
           "group": "inline@0"
+        },
+        {
+          "command": "claudeSwitcher.memories.removeProjectBlock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectBlock",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.removeProjectBlock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectBlock",
+          "group": "1_memory@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.deleteProjectMemory",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemory",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.deleteProjectMemory",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemory",
+          "group": "1_memory@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.openProjectFile",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMdFile",
+          "group": "inline@1"
         }
       ],
       "commandPalette": [
@@ -358,6 +383,18 @@
         },
         {
           "command": "claudeSwitcher.cred.hide",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.removeProjectBlock",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.deleteProjectMemory",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.openProjectFile",
           "when": "false"
         }
       ]
@@ -579,6 +616,30 @@
         "title": "Esconder o valor",
         "category": "Claude Switcher",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "claudeSwitcher.memories.addProjectInstruction",
+        "title": "Nova instrução no CLAUDE.md do projeto",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.memories.removeProjectBlock",
+        "title": "Remover do CLAUDE.md do projeto",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.memories.deleteProjectMemory",
+        "title": "Apagar a memória",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.memories.openProjectFile",
+        "title": "Abrir o arquivo",
+        "category": "Claude Switcher",
+        "icon": "$(go-to-file)"
       }
     ],
     "configuration": {

@@ -4,6 +4,7 @@
 // CLAUDE.md, where they count for every project and every account. Claude finds the repeats
 // (see memories.js); joining writes the rule and deletes the copies, with a backup, and both
 // can be undone. State shared by every window lives in memories.json.
+const fs = require('fs');
 const path = require('path');
 const { Store } = require('./store');
 const md = require('./claudeMd');
@@ -11,14 +12,23 @@ const mem = require('./memories');
 
 const KEEP_MERGED = 50;
 
-const INSTRUCTION_PROMPT = `Você escreve instruções para o CLAUDE.md global de um usuário do Claude Code. Esse arquivo vale em todos os projetos dele e é lido no começo de toda conversa.
+// The prompt for "Nova instrução", for the global CLAUDE.md or a project's (`label`).
+function instructionPrompt(label) {
+  const where = label
+    ? `o CLAUDE.md do projeto "${label}" de um usuário do Claude Code. Esse arquivo vale só nesse projeto e é lido no começo de toda conversa nele.`
+    : 'o CLAUDE.md global de um usuário do Claude Code. Esse arquivo vale em todos os projetos dele e é lido no começo de toda conversa.';
+  const scope = label
+    ? '- wrongScope: true quando o pedido é uma preferência pessoal que valeria em qualquer projeto (idioma, commits, estilo de resposta): ela ficaria melhor no CLAUDE.md global.'
+    : '- wrongScope: true quando o pedido só faz sentido num projeto, servidor ou sistema específico (no global ele valeria em todos).';
+  return `Você escreve instruções para ${where}
 Você recebe o arquivo atual e um pedido escrito livremente pelo usuário. Transforme o pedido numa instrução e diga onde ela entra.
 
 - rule: a instrução em português do Brasil, em uma ou duas frases no imperativo, clara e sem ambiguidade. Diga o que fazer (e quando), não o que o usuário pediu. Sem citar o pedido, sem markdown de lista.
 - section: o título de uma seção existente onde ela se encaixa, copiado exatamente como está no arquivo. Se nenhuma servir, um título novo e curto.
 - replaces: se um item que já existe diz o mesmo ou o contrário, copie o texto exato desse item (sem o "- " do começo); senão, "".
-- projectOnly: true quando o pedido só faz sentido num projeto, servidor ou sistema específico (no global ele valeria em todos).
-- note: uma frase curta para o usuário: onde entrou e por quê, o que substitui, ou por que parece ser de um projeto só.`;
+${scope}
+- note: uma frase curta para o usuário: onde entrou e por quê, o que substitui, ou por que o lugar parece errado.`;
+}
 
 const INSTRUCTION_SCHEMA = {
   type: 'object',
@@ -26,10 +36,10 @@ const INSTRUCTION_SCHEMA = {
     rule: { type: 'string' },
     section: { type: 'string' },
     replaces: { type: 'string' },
-    projectOnly: { type: 'boolean' },
+    wrongScope: { type: 'boolean' },
     note: { type: 'string' },
   },
-  required: ['rule', 'section', 'replaces', 'projectOnly', 'note'],
+  required: ['rule', 'section', 'replaces', 'wrongScope', 'note'],
 };
 
 class Curator {
@@ -142,31 +152,42 @@ class Curator {
     });
   }
 
+  // Where an instruction goes: the global CLAUDE.md (no target) or a project file
+  // (`{ file, label }`, from projectView()).
+  readTarget(target) {
+    return target ? md.readMd(target.file) : md.readClaudeMd(this.paths);
+  }
+
+  writeTarget(target, text) {
+    return target ? md.writeMd(target.file, this.switcherDir, text) : md.writeClaudeMd(this.paths, this.switcherDir, text);
+  }
+
   // Claude turns a free-form request ("quando eu pedir deploy, confira antes...") into an
-  // instruction for CLAUDE.md, with the section it belongs in and the item it replaces.
-  async draftInstruction(request) {
-    const text = md.readClaudeMd(this.paths);
-    const prompt = ['## CLAUDE.md global atual', '', text.trim() || '(vazio)', '', '## Pedido do usuário', '', String(request).trim()].join('\n');
-    const out = await this.run({ prompt, system: INSTRUCTION_PROMPT, schema: INSTRUCTION_SCHEMA });
+  // instruction, with the section it belongs in and the item it replaces.
+  async draftInstruction(request, target = null) {
+    const text = this.readTarget(target);
+    const title = target ? `CLAUDE.md do projeto ${target.label}` : 'CLAUDE.md global';
+    const prompt = [`## ${title} atual`, '', text.trim() || '(vazio)', '', '## Pedido do usuário', '', String(request).trim()].join('\n');
+    const out = await this.run({ prompt, system: instructionPrompt(target && target.label), schema: INSTRUCTION_SCHEMA });
     const rule = md.normalizeRule((out && out.rule) || '');
     if (!rule) throw new Error('o Claude não devolveu uma instrução');
     const sections = md.parseClaudeMd(text).blocks.filter((b) => b.kind === 'section');
-    const wanted = String((out && out.section) || '').replace(/^#+\s*/, '').trim() || md.PREFS_TITLE;
-    const existing = sections.find((s) => s.title.trim().toLowerCase() === wanted.toLowerCase());
+    const wanted = String((out && out.section) || '').replace(/^#+\s*/, '').trim() || (target ? 'Instruções' : md.PREFS_TITLE);
+    const existing = sections.find((sec) => sec.title.trim().toLowerCase() === wanted.toLowerCase());
     const replaced = out.replaces ? md.findItem(text, out.replaces) : null;
     return {
       rule,
       section: existing ? existing.title : wanted,
       newSection: !existing,
       replaces: replaced ? md.normalizeRule(replaced.text) : null,
-      projectOnly: !!out.projectOnly,
+      wrongScope: !!out.wrongScope,
       note: String(out.note || '').trim(),
     };
   }
 
   // Writes the instruction (taking out the item it replaces). Returns what undo needs.
-  async addInstruction({ rule, section, replaces = null }) {
-    const before = md.readClaudeMd(this.paths);
+  async addInstruction({ rule, section, replaces = null }, target = null) {
+    const before = this.readTarget(target);
     let text = before;
     if (replaces) {
       const old = md.findItem(text, replaces);
@@ -174,14 +195,51 @@ class Curator {
     }
     text = md.addRule(text, rule, section);
     if (text === before) return null;
-    await md.writeClaudeMd(this.paths, this.switcherDir, text);
-    return { before, after: text };
+    await this.writeTarget(target, text);
+    return { before, after: text, target };
   }
 
-  // Puts CLAUDE.md back as it was, unless it changed since.
-  async undoInstruction({ before, after }) {
-    if (md.readClaudeMd(this.paths) !== after) throw new Error('o CLAUDE.md mudou depois disso; desfaça pelo botão de remover');
-    await md.writeClaudeMd(this.paths, this.switcherDir, before);
+  // Puts the file back as it was, unless it changed since.
+  async undoInstruction({ before, after, target = null }) {
+    if (this.readTarget(target) !== after) throw new Error('o arquivo mudou depois disso; desfaça pelo botão de remover');
+    await this.writeTarget(target, before);
+  }
+
+  // --- the project open in VS Code ---------------------------------------------------------
+
+  // Its instruction files and the memories Claude Code saved for it.
+  projectView(root) {
+    const files = md.projectMdPaths(root).map((file) => ({ file, text: md.readMd(file), exists: fs.existsSync(file) }));
+    const dir = mem.projectDirFor(this.paths, root);
+    const parts = root.split(/[\\/]+/).filter(Boolean);
+    return {
+      root,
+      label: parts[parts.length - 1] || root,
+      files,
+      // "Nova instrução" writes here: the file that exists, the root CLAUDE.md otherwise.
+      target: (files.find((f) => f.exists) || files[0]).file,
+      memoryDir: path.join(mem.projectsDir(this.paths), dir, 'memory'),
+      memories: mem.scanMemories(this.paths, { project: dir }),
+    };
+  }
+
+  // Takes a section or item out of a project file (`ref` from claudeMd.refOf).
+  async removeFromFile(file, ref) {
+    const text = md.readMd(file);
+    const next = md.removeBlock(text, ref);
+    if (next == null) throw new Error('o arquivo mudou; a lista foi atualizada, tente de novo');
+    await md.writeMd(file, this.switcherDir, next);
+  }
+
+  // Deletes one memory (and its link in MEMORY.md), with a backup. Returns what restoreMemory needs.
+  async deleteMemory(id) {
+    const saved = await mem.removeMemory(this.paths, id, path.join(this.switcherDir, 'memory-backup', md.stamp()));
+    if (!saved) throw new Error('essa memória não existe mais');
+    return saved;
+  }
+
+  restoreMemory(saved) {
+    return mem.restoreMemory(this.paths, saved);
   }
 
   async ignore(key) {
