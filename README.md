@@ -107,7 +107,7 @@ A página **Memórias** (no menu **…** do painel) só lê as memórias e só g
 Repetidas nos projetos                        2 para juntar
   ⑂ Responder sempre em português             game-galomovido, profanity-filter, Rota7/web
   ⑂ Sem Co-Authored-By: Claude nos commits    dreamcore, Rota7/web, claude-switcher
-CLAUDE.md global                              3 itens
+Memórias Globais                              3 itens
   graphify
   Preferências
     ⑂ Uma conferência rápida, depois parar    juntada
@@ -119,7 +119,7 @@ CLAUDE.md global                              3 itens
 - **Nova instrução (＋):** escreva do seu jeito o que o Claude deve fazer, como "quando eu pedir deploy, confere antes se tem commit pendente". O Claude escreve a instrução, escolhe a seção (ou cria uma), diz se ela substitui um item que já existe e avisa quando o pedido parece ser de um projeto só. Nada é gravado antes de você ver a prévia, e dá para editar o texto e desfazer.
 - **Remover (🗑):** qualquer seção ou item do `CLAUDE.md` global sai por aqui. Se a regra veio de uma junção, dá para remover e devolver as memórias aos projetos.
 - Clique numa memória ou num item para abri-lo no editor.
-- **Projeto: <nome>:** o terceiro grupo mostra o projeto aberto no VS Code agora (a pasta do arquivo no editor) e muda sozinho quando você troca de projeto. Ele traz:
+- **Memórias Projeto (<nome>):** o terceiro grupo mostra o projeto aberto no VS Code agora (a pasta do arquivo no editor) e muda sozinho quando você troca de projeto. Ele traz:
   - o `CLAUDE.md` do projeto (`CLAUDE.md` na raiz e `.claude/CLAUDE.md`), em seções e itens com 🗑;
   - **Nova instrução do projeto…**, igual à global, mas grava no arquivo do projeto e avisa quando o pedido parece valer para todos os projetos;
   - as memórias que o Claude salvou neste projeto, separadas em preferências, fatos e referências. Clique para abrir; o 🗑 apaga (com Desfazer).
@@ -233,7 +233,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.10.0.vsix
+code --install-extension dist/claude-switcher-0.10.1.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

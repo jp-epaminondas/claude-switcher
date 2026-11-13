@@ -457,16 +457,16 @@ function mdTree(text, file, idPrefix, ctx, joinedRules = new Set()) {
   };
 }
 
-// "CLAUDE.md global": every section and item, each one removable.
+// "Memórias Globais": the global CLAUDE.md, every section and item, each one removable.
 function claudeMdNode(s, paths) {
   const file = md.claudeMdPath(paths);
   const tree = mdTree(s.claudeMd, file, 'claudeMd', 'claudeBlock', new Set(s.merged.map((r) => r.rule).filter(Boolean)));
-  const node = new vscode.TreeItem('CLAUDE.md global', Collapsed);
+  const node = new vscode.TreeItem('Memórias Globais', Collapsed);
   node.id = 'claudeMd';
   node.contextValue = 'claudeMdRoot';
   node.iconPath = icon('book');
   node.description = plural(tree.items, 'item', 'itens');
-  node.tooltip = `${file}\n\nVale para todos os projetos e todas as contas. Remova aqui o que não quer mais.`;
+  node.tooltip = `O CLAUDE.md global: ${file}\n\nVale para todos os projetos e todas as contas. Remova aqui o que não quer mais.`;
   const add = line('claudeMd.add', 'Nova instrução…', 'add', {
     description: 'escreva do seu jeito',
     tooltip: 'Diga o que o Claude deve fazer (ou nunca fazer). O Claude escreve a instrução, escolhe a seção e mostra antes de gravar.',
@@ -483,9 +483,9 @@ const MEMORY_GROUPS = [
   ['other', 'Outras', 'note', () => true],
 ];
 
-// "Projeto: <nome>": the project open in VS Code, its CLAUDE.md files and its memories.
+// "Memórias Projeto (<nome>)": the project open in VS Code, its CLAUDE.md files and memories.
 function projectNode(p, root) {
-  const node = new vscode.TreeItem(p ? `Projeto: ${p.label}` : 'Projeto', Collapsed);
+  const node = new vscode.TreeItem(p ? `Memórias Projeto (${p.label})` : 'Memórias Projeto', Collapsed);
   node.id = 'project';
   node.iconPath = icon('folder-opened');
   if (!p) {
