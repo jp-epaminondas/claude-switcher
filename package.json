@@ -449,6 +449,12 @@
         "icon": "$(sync)"
       },
       {
+        "command": "claudeSwitcher.toggleTopicGuard",
+        "title": "Ligar/desligar o aviso de assunto novo",
+        "category": "Claude Switcher",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "claudeSwitcher.memories.analyze",
         "title": "Analisar as memórias de novo",
         "category": "Claude Switcher",
@@ -655,6 +661,17 @@
           "type": "boolean",
           "default": false,
           "description": "Autoswitcher: quando a conta em uso esgota, troca sozinho para a próxima disponível e faz o Claude Code continuar a tarefa, sem precisar digitar \"continue\". Instala um hook StopFailure em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
+        },
+        "claudeSwitcher.topicGuard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Aviso de assunto novo: numa conversa longa do Claude Code, um pedido de outro assunto é segurado antes de ir para o modelo, e o switcher oferece abrir uma conversa nova já com o pedido. Cada resposta relê o contexto inteiro, então numa conversa longa é ali que vai a maior parte dos tokens. Para continuar na mesma conversa, envie o pedido de novo. Quem decide se o assunto mudou é o Haiku, numa pergunta curta. Instala um hook UserPromptSubmit em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
+        },
+        "claudeSwitcher.topicGuardMinContextK": {
+          "type": "number",
+          "default": 150,
+          "minimum": 20,
+          "description": "O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto. Abaixo disso o pedido segue direto, sem pergunta nenhuma."
         },
         "claudeSwitcher.switchAtPercent": {
           "type": "number",

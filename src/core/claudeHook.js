@@ -4,11 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const { writeFileAtomic } = require('./fsutil');
 
-const SCRIPT = 'limit-hook.js';
-const SOURCE = path.join(__dirname, '..', 'hook', SCRIPT);
+const LIMIT_SCRIPT = 'limit-hook.js';
+const TOPIC_SCRIPT = 'topic-hook.js';
 
 const settingsFile = (paths) => path.join(paths.configDir, 'settings.json');
-const isOurs = (h) => !!h && [h.command, ...(Array.isArray(h.args) ? h.args : [])].some((s) => typeof s === 'string' && s.endsWith(SCRIPT));
+const isOurs = (h, script) => !!h && [h.command, ...(Array.isArray(h.args) ? h.args : [])].some((s) => typeof s === 'string' && s.endsWith(script));
 
 // The node executable the hook runs with (null when Node.js isn't installed). VS Code's own
 // process.execPath is Electron, not node.
@@ -29,7 +29,31 @@ function findNode(env = process.env, platform = process.platform) {
 // Puts the autoswitcher's hooks into Claude Code's user settings, or takes them out,
 // leaving the rest of the file as it was. Claude Code picks the change up in open sessions
 // too. Returns true when settings.json changed.
-async function syncHook(paths, switcherDir, { enabled, nodePath = null }) {
+function syncHook(paths, switcherDir, { enabled, nodePath = null }) {
+  return syncScript(paths, switcherDir, LIMIT_SCRIPT, { enabled, nodePath }, (command, script) => ({
+    // A turn stopped on the usage limit: switch, then wake the model so it carries on.
+    StopFailure: { matcher: 'rate_limit', hooks: [{ type: 'command', command, args: [script], asyncRewake: true, timeout: 120 }] },
+    // A turn ended normally: a chance to switch between two messages.
+    Stop: { hooks: [{ type: 'command', command, args: [script], async: true, timeout: 30 }] },
+  }));
+}
+
+// The topic guard's hook: every prompt waits for it before reaching the model.
+function syncTopicHook(paths, switcherDir, { enabled, nodePath = null }) {
+  return syncScript(paths, switcherDir, TOPIC_SCRIPT, { enabled, nodePath }, (command, script) => ({
+    UserPromptSubmit: { hooks: [{ type: 'command', command, args: [script], timeout: 40 }] },
+  }));
+}
+
+// Both features rewrite the same settings.json, so one write at a time.
+let writing = Promise.resolve();
+function syncScript(...args) {
+  const run = writing.then(() => syncScriptNow(...args));
+  writing = run.catch(() => {});
+  return run;
+}
+
+async function syncScriptNow(paths, switcherDir, scriptName, { enabled, nodePath }, entries) {
   const file = settingsFile(paths);
   let text = '';
   try {
@@ -46,23 +70,18 @@ async function syncHook(paths, switcherDir, { enabled, nodePath = null }) {
     }
   }
   const before = JSON.stringify(settings);
-  const script = path.join(switcherDir, SCRIPT);
+  const script = path.join(switcherDir, scriptName);
   if (enabled) {
     if (!nodePath) throw new Error('Node.js não encontrado no PATH');
-    copyIfChanged(SOURCE, script);
+    copyIfChanged(path.join(__dirname, '..', 'hook', scriptName), script);
   }
 
   const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
-  const ours = {
-    // A turn stopped on the usage limit: switch, then wake the model so it carries on.
-    StopFailure: { matcher: 'rate_limit', hooks: [{ type: 'command', command: nodePath, args: [script], asyncRewake: true, timeout: 120 }] },
-    // A turn ended normally: a chance to switch between two messages.
-    Stop: { hooks: [{ type: 'command', command: nodePath, args: [script], async: true, timeout: 30 }] },
-  };
+  const ours = entries(nodePath, script);
   for (const event of Object.keys(ours)) {
     const groups = [];
     for (const g of Array.isArray(hooks[event]) ? hooks[event] : []) {
-      const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h)) : null;
+      const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h, scriptName)) : null;
       if (kept && !kept.length && g.hooks.length) continue; // it held only ours
       groups.push(kept ? { ...g, hooks: kept } : g);
     }
@@ -87,4 +106,4 @@ function copyIfChanged(from, to) {
   fs.writeFileSync(to, text, 'utf8');
 }
 
-module.exports = { syncHook, findNode, settingsFile, copyIfChanged };
+module.exports = { syncHook, syncTopicHook, findNode, settingsFile, copyIfChanged };

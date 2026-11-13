@@ -21,7 +21,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
 - Quando uma conta esgotada volta, aparece *"✅ Conta 3 voltou e já está disponível. [Usar Conta 3]"*.
 
-**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Analisar as memórias de novo, Abrir o CLAUDE.md global.
+**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Analisar as memórias de novo, Abrir o CLAUDE.md global.
 
 ### Autoswitcher
 
@@ -39,6 +39,20 @@ Como funciona:
 - Se o limite estourar no meio de uma resposta mesmo assim, entra a troca com "continue" descrita acima.
 - O autoswitcher também troca de conta quando a consulta de uso mostra que a conta em uso esgotou antes de alguma conversa bater no limite.
 - O hook só age enquanto alguma janela do VS Code com o switcher estiver aberta. Ele vale também para o `claude` rodando no terminal.
+
+### Aviso de assunto novo
+
+Cada resposta do Claude relê a conversa inteira. Numa conversa de 500k tokens, até um "ok, roda os testes" relê 500k, e é aí que vai a maior parte do uso. Para um assunto novo, uma conversa nova sai bem mais barata.
+
+Com o aviso ligado (padrão), antes de cada pedido ir para o modelo o switcher olha o tamanho da conversa:
+- Abaixo de 150k tokens de contexto (`claudeSwitcher.topicGuardMinContextK`), o pedido segue direto, sem pergunta nenhuma.
+- Acima disso, o Haiku compara o pedido com os últimos pedidos da conversa, numa pergunta curta que leva de 5 a 10 s. Respostas curtas ("sim", "continue") e comandos (`/compact`) seguem direto.
+- Se for outro assunto, o pedido é segurado e aparece *"Assunto novo (instalador do bloqueio) numa conversa que já tem 520k tokens de contexto… [Abrir nova conversa] [Continuar nesta]"*.
+- **Abrir nova conversa** abre uma conversa do Claude Code já com o pedido digitado; ele também fica copiado.
+- **Continuar nesta** copia o pedido para você colar e enviar de novo. Enviar o mesmo pedido de novo também passa. Depois disso o switcher só pergunta de novo quando a conversa crescer mais 150k.
+- Na dúvida, ou se o Haiku não responder a tempo, o pedido segue.
+
+Ao ligar, a extensão instala um hook `UserPromptSubmit` em `~/.claude/settings.json`, e o remove ao desligar. Liga e desliga pelo menu da barra de status ou pelo comando "Ligar/desligar o aviso de assunto novo".
 
 ### Qual conta usar (⭐ e 🔥)
 
@@ -160,6 +174,8 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 | Configuração | Padrão | O que faz |
 |---|---|---|
 | `claudeSwitcher.autoSwitch` | `false` | Autoswitcher: troca sozinho quando a conta em uso esgota e o Claude continua a tarefa |
+| `claudeSwitcher.topicGuard` | `true` | Aviso de assunto novo: numa conversa longa, segura o pedido de outro assunto e oferece uma conversa nova |
+| `claudeSwitcher.topicGuardMinContextK` | `150` | O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto |
 | `claudeSwitcher.switchAtPercent` | `99` | Com o autoswitcher ligado, troca no fim de uma resposta quando a conta chega a esta % (100 desliga) |
 | `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
 | `claudeSwitcher.notifyPace` | `true` | Avisos da previsão: pausa, todas as contas para esgotar, contas que não aguentam |
@@ -207,14 +223,16 @@ src/
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
-    claudeHook.js    instala e remove o hook do autoswitcher no settings.json do Claude Code
-    limitQueue.js    fila de pedidos entre o hook e a extensão (~/.claude-switcher/limits/)
+    claudeHook.js    instala e remove os hooks do autoswitcher e do aviso de assunto novo no settings.json do Claude Code
+    limitQueue.js    fila de pedidos entre um hook e a extensão (~/.claude-switcher/limits/ e topics/)
+    topic.js         aviso de assunto novo: lê o fim da conversa e monta a pergunta ao Haiku
     store.js         accounts.json e memories.json compartilhados entre janelas
     fsutil.js        escrita atômica e lock
     paths.js         onde ficam os arquivos
   hook/
     limit-hook.js    roda dentro do Claude Code no fim de cada resposta e quando o limite estoura (copiado para ~/.claude-switcher/)
-    uninstall.js     tira o hook do settings.json quando a extensão é desinstalada
+    topic-hook.js    roda dentro do Claude Code antes de cada pedido ir para o modelo (copiado para ~/.claude-switcher/)
+    uninstall.js     tira os hooks do settings.json quando a extensão é desinstalada
     segredo.js       o comando que o Claude usa para rodar algo com uma credencial (copiado para ~/.claude-switcher/)
   ui/                tudo que aparece no VS Code
     sidebar.js       o painel da barra lateral, uma página de cada vez
@@ -225,6 +243,7 @@ src/
     menu.js          menu rápido
     actions.js       trocar, adicionar, renomear, remover e as notificações
     autoSwitch.js    liga/desliga o autoswitcher e atende os pedidos do hook
+    topicGuard.js    liga/desliga o aviso de assunto novo, atende o hook e oferece a conversa nova
     present.js       textos de cada conta, compartilhados pelas telas
 test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
 media/               ícone da barra lateral

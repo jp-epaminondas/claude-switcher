@@ -52,6 +52,9 @@ function createMenu(app, actions) {
         app.autoSwitch && app.autoSwitch.enabled()
           ? { label: '$(sync) Desligar autoswitcher', description: 'ligado: troca e continua sozinho', action: 'auto' }
           : { label: '$(sync-ignored) Ligar autoswitcher', description: 'troca e continua sozinho quando a conta esgota', action: 'auto' },
+        app.topicGuard && app.topicGuard.enabled()
+          ? { label: '$(comment-discussion) Desligar aviso de assunto novo', description: 'ligado: sugere conversa nova numa conversa longa', action: 'topic' }
+          : { label: '$(comment) Ligar aviso de assunto novo', description: 'sugere conversa nova quando o assunto muda numa conversa longa', action: 'topic' },
         { label: '$(add) Adicionar conta…', action: 'add' },
         { label: '$(refresh) Atualizar uso agora', action: 'refresh' },
       ];
@@ -73,6 +76,7 @@ function createMenu(app, actions) {
       if (!item) return;
       if (item.action === 'next') actions.switchNext();
       else if (item.action === 'auto') app.autoSwitch.toggle();
+      else if (item.action === 'topic') app.topicGuard.toggle();
       else if (item.action === 'add') actions.addAccount();
       else if (item.action === 'refresh') app.tick({ force: true });
       else if (item.account) actions.pickAccount(item.account);

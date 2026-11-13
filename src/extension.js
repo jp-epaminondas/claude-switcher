@@ -16,6 +16,7 @@ const { createAccountsView } = require('./ui/accountsView');
 const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
 const { createAutoSwitch } = require('./ui/autoSwitch');
+const { createTopicGuard } = require('./ui/topicGuard');
 const { createMemoriesView } = require('./ui/memoriesView');
 const { createCredentialsView } = require('./ui/credentialsView');
 
@@ -47,22 +48,19 @@ function activate(context) {
     render: () => render(),
     tick: (opts) => tick(opts),
   };
-  // Analyses run from the switcher's own folder, which has no project settings or memories.
-  app.curator = new Curator({
-    paths,
-    switcherDir: dir,
-    log,
-    run: (q) => {
-      fs.mkdirSync(dir, { recursive: true });
-      return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
-    },
-  });
+  // Questions to Claude run from the switcher's own folder, which has no project settings or memories.
+  app.askClaude = (q) => {
+    fs.mkdirSync(dir, { recursive: true });
+    return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
+  };
+  app.curator = new Curator({ paths, switcherDir: dir, log, run: app.askClaude });
   const actions = createActions(app);
   const menu = createMenu(app, actions);
   const sidebar = createSidebar();
   const accountsView = createAccountsView(app, sidebar); // first page: the one that opens
   const statusBar = createStatusBar(app);
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
+  const topicGuard = (app.topicGuard = createTopicGuard(app));
   const memoriesView = createMemoriesView(app, sidebar);
   const credentialsView = createCredentialsView(app, sidebar);
 
@@ -71,6 +69,7 @@ function activate(context) {
     sidebar,
     statusBar,
     autoSwitch,
+    topicGuard,
     memoriesView,
     credentialsView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
@@ -78,6 +77,7 @@ function activate(context) {
     vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),
     vscode.commands.registerCommand('claudeSwitcher.refresh', () => tick({ force: true })),
     vscode.commands.registerCommand('claudeSwitcher.toggleAutoSwitch', autoSwitch.toggle),
+    vscode.commands.registerCommand('claudeSwitcher.toggleTopicGuard', topicGuard.toggle),
     vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
     vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
     vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
@@ -85,6 +85,7 @@ function activate(context) {
       if (e.affectsConfiguration('claudeSwitcher.autoSwitch') || e.affectsConfiguration('claudeSwitcher.switchAtPercent')) {
         autoSwitch.onConfigChanged();
       }
+      else if (e.affectsConfiguration('claudeSwitcher.topicGuard')) topicGuard.onConfigChanged();
       else if (e.affectsConfiguration('claudeSwitcher')) render();
     }),
   );

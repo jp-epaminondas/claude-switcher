@@ -9,9 +9,10 @@ const LEFTOVER_MS = 5 * 60 * 1000;
 // Mailbox shared with the hook (src/hook/limit-hook.js): on a limit it drops "<id>.req" and
 // waits for "<id>.res"; at the end of a turn it drops "<id>.turn". The hook only writes while
 // .alive is fresh, that is, while some VS Code window is listening.
+// The topic guard uses the same mailbox in its own folder (src/hook/topic-hook.js).
 class LimitQueue {
-  constructor(switcherDir) {
-    this.dir = path.join(switcherDir, 'limits');
+  constructor(switcherDir, folder = 'limits') {
+    this.dir = path.join(switcherDir, folder);
     this.alivePath = path.join(this.dir, '.alive');
   }
 
