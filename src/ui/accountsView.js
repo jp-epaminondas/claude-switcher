@@ -5,7 +5,7 @@ const vscode = require('vscode');
 const { outStatus, fmtClock, fmtIn, fmtMinutes, fmtPct } = require('../core/usage');
 const { MIN_DAYS } = require('../core/demand');
 const { reason, reasonLines, soonestBack, fmtSessions } = require('../core/advisor');
-const { accountState, usageOf, flagOf, headline, escapeMd } = require('./present');
+const { accountState, usageOf, flagOf, headline, escapeMd, usageBar } = require('./present');
 
 function createAccountsView(app, sidebar) {
   const page = sidebar.page('accounts', 'Contas', {
@@ -65,16 +65,21 @@ function accountItem(a, data, advice, now) {
   if (!s.active) item.command = { command: 'claudeSwitcher.useAccount', title: 'Usar esta conta', arguments: [a.id] };
 
   const md = new vscode.MarkdownString('', true);
+  md.supportHtml = true; // the usage bars
   md.appendMarkdown(`**${escapeMd(a.label)}** · ${escapeMd(a.email || '')}\n\n$(${s.icon}) ${s.situation}\n\n`);
   if (flag === 'best') md.appendMarkdown(`⭐ **Recomendada:** ${reason(x, now)}.\n\n`);
   else if (flag === 'burn') md.appendMarkdown(`🔥 ${reason(x, now)}.\n\n`);
   if (u) {
-    if (u.five != null) md.appendMarkdown(`- 5h: **${fmtPct(u.five)}**${u.fiveResets ? ` · zera ${fmtClock(u.fiveResets, now)}` : ''}\n`);
+    if (u.five != null) {
+      md.appendMarkdown(`**Sessão de 5h** · ${fmtPct(u.five)} usado${u.fiveResets ? ` · zera ${fmtClock(u.fiveResets, now)}` : ''}\n\n`);
+      md.appendMarkdown(`${usageBar(u.five)}\n\n`);
+    }
     if (u.week != null) {
       const sessions = x.sessions != null ? ` · sobram ≈ ${fmtSessions(x.sessions)}` : '';
-      md.appendMarkdown(`- Semana: **${fmtPct(u.week)}**${sessions}${u.weekResets ? ` · renova ${fmtClock(u.weekResets, now)}` : ''}\n`);
+      md.appendMarkdown(`**Semana** · ${fmtPct(u.week)} usado${sessions}${u.weekResets ? ` · renova ${fmtClock(u.weekResets, now)}` : ''}\n\n`);
+      md.appendMarkdown(`${usageBar(u.week)}\n\n`);
     }
-    md.appendMarkdown(`\nAtualizado ${fmtClock(u.fetchedAt, now)}`);
+    md.appendMarkdown(`Atualizado ${fmtClock(u.fetchedAt, now)}`);
   }
   if (!s.active) md.appendMarkdown('\n\n_Clique para usar esta conta._');
   item.tooltip = md;

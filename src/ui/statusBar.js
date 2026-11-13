@@ -3,7 +3,7 @@
 // The account in use, on the left of the status bar; click opens the quick menu.
 const vscode = require('vscode');
 const { outStatus, effectivePct, fmtClock, fmtMinutes, fmtPct } = require('../core/usage');
-const { accountState, usageOf, flagOf, headline, escapeMd } = require('./present');
+const { accountState, usageOf, flagOf, headline, escapeMd, usageBar } = require('./present');
 
 function createStatusBar(app) {
   const item = vscode.window.createStatusBarItem('claudeSwitcher.status', vscode.StatusBarAlignment.Left, 100);
@@ -52,6 +52,7 @@ function createStatusBar(app) {
 
 function tooltip(data, advice, now, autoSwitch) {
   const md = new vscode.MarkdownString('', true);
+  md.supportHtml = true; // the usage bars
   if (!data.accounts.length) {
     md.appendMarkdown('Nenhuma conta salva ainda. Clique para adicionar.');
     return md;
@@ -70,7 +71,8 @@ function tooltip(data, advice, now, autoSwitch) {
     const s = accountState(a, data, now);
     const u = usageOf(a, now) || {};
     const flag = flags[flagOf(a, advice)] || '';
-    md.appendMarkdown(`| $(${s.icon}) | ${flag}${escapeMd(a.label)} | ${fmtPct(u.five)} | ${fmtPct(u.week)} | ${s.situation} |\n`);
+    const cell = (pct) => (pct == null ? fmtPct(pct) : `${usageBar(pct, 10)} ${fmtPct(pct)}`);
+    md.appendMarkdown(`| $(${s.icon}) | ${flag}${escapeMd(a.label)} | ${cell(u.five)} | ${cell(u.week)} | ${s.situation} |\n`);
   }
   if (autoSwitch) md.appendMarkdown('\n$(sync) Autoswitcher ligado: troca e continua sozinho quando a conta esgota.\n');
   md.appendMarkdown('\nClique para trocar de conta.');

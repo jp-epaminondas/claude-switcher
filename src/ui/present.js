@@ -56,4 +56,15 @@ function headline(data, advice, now) {
 
 const escapeMd = (s) => String(s).replace(/[|\\`*_[\]<>]/g, '\\$&');
 
-module.exports = { accountState, usageOf, usageSummary, flagOf, headline, escapeMd };
+// Usage as a bar of blocks: used in red, what is left in green, in the theme's chart colors.
+// Only some usage reads as at least one red block, and anything short of 100% keeps one green.
+// The hover's MarkdownString needs supportHtml for the colors.
+function usageBar(pct, width = 20) {
+  if (pct == null) return '';
+  let used = Math.round((Math.min(100, Math.max(0, pct)) / 100) * width);
+  if (pct > 0 && pct < 100) used = Math.min(width - 1, Math.max(1, used));
+  const seg = (n, color) => (n ? `<span style="color:var(--vscode-charts-${color});">${'█'.repeat(n)}</span>` : '');
+  return seg(used, 'red') + seg(width - used, 'green');
+}
+
+module.exports = { accountState, usageOf, usageSummary, flagOf, headline, escapeMd, usageBar };
