@@ -1,8 +1,8 @@
 {
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
-  "description": "Troca a conta do Claude Code com um clique e avisa quando uma conta esgotada volta.",
-  "version": "0.6.1",
+  "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
+  "version": "0.7.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -36,6 +36,11 @@
           "id": "claudeSwitcher.accounts",
           "name": "Contas",
           "icon": "media/switcher.svg"
+        },
+        {
+          "id": "claudeSwitcher.memories",
+          "name": "Memórias",
+          "icon": "media/switcher.svg"
         }
       ]
     },
@@ -61,6 +66,16 @@
           "command": "claudeSwitcher.refresh",
           "when": "view == claudeSwitcher.accounts",
           "group": "navigation@3"
+        },
+        {
+          "command": "claudeSwitcher.memories.openClaudeMd",
+          "when": "view == claudeSwitcher.memories",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.analyze",
+          "when": "view == claudeSwitcher.memories",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -93,6 +108,41 @@
           "command": "claudeSwitcher.removeAccount",
           "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
           "group": "1_account@3"
+        },
+        {
+          "command": "claudeSwitcher.memories.merge",
+          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.ignore",
+          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.memories.merge",
+          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "group": "1_memory@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.ignore",
+          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "group": "1_memory@2"
+        },
+        {
+          "command": "claudeSwitcher.memories.remove",
+          "when": "view == claudeSwitcher.memories && viewItem == claudeBlock",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.remove",
+          "when": "view == claudeSwitcher.memories && viewItem == claudeBlock",
+          "group": "1_memory@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.openClaudeMd",
+          "when": "view == claudeSwitcher.memories && viewItem == claudeMdRoot",
+          "group": "inline@1"
         }
       ],
       "commandPalette": [
@@ -106,6 +156,22 @@
         },
         {
           "command": "claudeSwitcher.removeAccount",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.merge",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.ignore",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.remove",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.clearIgnored",
           "when": "false"
         }
       ]
@@ -158,6 +224,41 @@
         "title": "Ligar/desligar o autoswitcher",
         "category": "Claude Switcher",
         "icon": "$(sync)"
+      },
+      {
+        "command": "claudeSwitcher.memories.analyze",
+        "title": "Analisar as memórias de novo",
+        "category": "Claude Switcher",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeSwitcher.memories.openClaudeMd",
+        "title": "Abrir o CLAUDE.md global",
+        "category": "Claude Switcher",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "claudeSwitcher.memories.merge",
+        "title": "Juntar no CLAUDE.md global",
+        "category": "Claude Switcher",
+        "icon": "$(merge)"
+      },
+      {
+        "command": "claudeSwitcher.memories.ignore",
+        "title": "Ignorar",
+        "category": "Claude Switcher",
+        "icon": "$(close)"
+      },
+      {
+        "command": "claudeSwitcher.memories.clearIgnored",
+        "title": "Mostrar as sugestões ignoradas",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.memories.remove",
+        "title": "Remover do CLAUDE.md",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {

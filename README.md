@@ -1,6 +1,6 @@
 # Claude Account Switcher
 
-Extensão do VS Code para trocar a conta do Claude Code com um clique quando a atual atinge o limite, e para ver quando uma conta esgotada volta.
+Extensão do VS Code para trocar a conta do Claude Code com um clique quando a atual atinge o limite e para ver quando uma conta esgotada volta. Ela também junta no `CLAUDE.md` global as preferências que o Claude salvou de novo em cada projeto.
 
 ## Como usar
 
@@ -20,7 +20,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
 - Quando uma conta esgotada volta, aparece *"✅ Conta 3 voltou e já está disponível. [Usar Conta 3]"*.
 
-**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher.
+**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Analisar as memórias de novo, Abrir o CLAUDE.md global.
 
 ### Autoswitcher
 
@@ -96,6 +96,29 @@ A extensão aprende o seu ritmo de uso e prevê se as contas aguentam. No painel
 
 A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoje.
 
+### Memórias: uma regra só, no CLAUDE.md global
+
+As memórias do Claude Code já valem para todas as contas, porque ficam em `~/.claude` e não na conta. Elas ficam presas a cada projeto, porém. Quando você corrige o Claude num projeto (por exemplo, "não coloque coautor nos commits"), ele salva isso na memória daquele projeto. Em outro projeto, ele não sabe e salva de novo.
+
+O painel **Memórias**, abaixo de Contas, junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
+
+```
+Repetidas nos projetos                        2 para juntar
+  ⑂ Responder sempre em português             game-galomovido, profanity-filter, Rota7/web
+  ⑂ Sem Co-Authored-By: Claude nos commits    dreamcore, Rota7/web, claude-switcher
+CLAUDE.md global                              3 itens
+  graphify
+  Preferências
+    ⑂ Uma conferência rápida, depois parar    juntada
+```
+
+- **Análise:** ao abrir o painel, o Claude (modelo Haiku, pelo `claude -p`) lê as memórias de preferência de todos os projetos e agrupa as que dizem a mesma coisa, mesmo com outras palavras ou em outra língua. Entram só as memórias dos tipos `feedback` e `user`. Fatos de um projeto, como servidores e telas, ficam onde estão. A análise usa um pouco do limite da conta em uso e só roda de novo quando alguma memória ou o `CLAUDE.md` muda. O botão ⟳ força uma nova análise.
+- **Juntar (⑂):** mostra a regra para você editar, grava na seção `# Preferências` do `CLAUDE.md` global e apaga as cópias dos projetos, com os links delas no `MEMORY.md`. A notificação tem **Desfazer**. Se a regra já estava no `CLAUDE.md`, Juntar só apaga as cópias.
+- **Ignorar (✕):** some com a sugestão. Clique em "sugestões ignoradas" para mostrar de novo.
+- **Remover (🗑):** qualquer seção ou item do `CLAUDE.md` global sai por aqui. Se a regra veio de uma junção, dá para remover e devolver as memórias aos projetos.
+- Clique numa memória ou num item para abri-lo no editor.
+- Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/`: as memórias apagadas e as últimas 20 versões do `CLAUDE.md`.
+
 ### Adicionar as contas
 
 1. Na primeira vez, a conta que já está logada é salva sozinha como **Conta 1**.
@@ -123,6 +146,7 @@ A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoj
 - O Claude Code guarda o login em `~/.claude/.credentials.json`. Para trocar de conta, a extensão grava ali o login salvo da conta escolhida, mexendo só no campo `claudeAiOauth`. Também atualiza o `oauthAccount` em `~/.claude.json`, que é o e-mail mostrado no `/status`.
 - O Claude Code relê esse arquivo antes de cada requisição. Por isso as conversas abertas passam a usar a conta nova **na próxima mensagem**, sem reiniciar nem recarregar nada.
 - O uso vem do mesmo endpoint do `/usage` do Claude Code (`/api/oauth/usage`). A conta em uso é consultada a cada 3 minutos. As outras são consultadas a cada 15 minutos e também na hora exata em que o limite delas zera. A extensão também aproveita as consultas que o próprio Claude Code já faz.
+- As memórias são lidas de `~/.claude/projects/<projeto>/memory/`. O estado do painel Memórias (análise, ignoradas, junções que dá para desfazer) fica em `~/.claude-switcher/memories.json`.
 - Os logins ficam em `~/.claude-switcher/accounts.json`, um arquivo compartilhado entre todas as janelas do VS Code. Na primeira troca é feita uma cópia dos arquivos originais em `~/.claude-switcher/backup/`.
 
 ### Segurança dos tokens
@@ -144,32 +168,37 @@ src/
     advisor.js       qual conta usar (⭐/🔥) e aprendizado do custo de uma sessão
     demand.js        guarda os seus dias de uso, hora a hora, e sorteia semanas possíveis
     planner.js       simula os próximos 7 dias: esperas, pausas e se as contas aguentam
+    curator.js       painel Memórias: analisa, junta, ignora, remove e desfaz
+    memories.js      lê as memórias dos projetos, edita o MEMORY.md e monta a análise
+    claudeMd.js      o CLAUDE.md global em seções e itens; adiciona e remove regras
+    claudeCli.js     pergunta ao Claude pelo `claude -p`, com resposta em JSON
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
     claudeHook.js    instala e remove o hook do autoswitcher no settings.json do Claude Code
     limitQueue.js    fila de pedidos entre o hook e a extensão (~/.claude-switcher/limits/)
-    store.js         accounts.json compartilhado entre janelas
+    store.js         accounts.json e memories.json compartilhados entre janelas
     fsutil.js        escrita atômica e lock
     paths.js         onde ficam os arquivos
   hook/
     limit-hook.js    roda dentro do Claude Code no fim de cada resposta e quando o limite estoura (copiado para ~/.claude-switcher/)
     uninstall.js     tira o hook do settings.json quando a extensão é desinstalada
   ui/                tudo que aparece no VS Code
-    accountsView.js  painel da barra lateral
+    accountsView.js  painel Contas
+    memoriesView.js  painel Memórias
     statusBar.js     indicador na barra de status
     menu.js          menu rápido
     actions.js       trocar, adicionar, renomear, remover e as notificações
     autoSwitch.js    liga/desliga o autoswitcher e atende os pedidos do hook
     present.js       textos de cada conta, compartilhados pelas telas
-test/                testes do core (pasta temporária + API falsa, sem rede)
+test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
 media/               ícone da barra lateral
 ```
 
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.6.0.vsix
+code --install-extension dist/claude-switcher-0.7.0.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

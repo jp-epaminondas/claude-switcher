@@ -8,11 +8,14 @@ const { Store } = require('./core/store');
 const { Switcher } = require('./core/switcher');
 const { mtime } = require('./core/fsutil');
 const { adviseWithPlan } = require('./core/planner');
-const { createActions } = require('./ui/actions');
+const { Curator } = require('./core/curator');
+const { runClaude } = require('./core/claudeCli');
+const { createActions, claudeExecutable } = require('./ui/actions');
 const { createAccountsView } = require('./ui/accountsView');
 const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
 const { createAutoSwitch } = require('./ui/autoSwitch');
+const { createMemoriesView } = require('./ui/memoriesView');
 
 const MINUTE = 60 * 1000;
 
@@ -42,17 +45,29 @@ function activate(context) {
     render: () => render(),
     tick: (opts) => tick(opts),
   };
+  // Analyses run from the switcher's own folder, which has no project settings or memories.
+  app.curator = new Curator({
+    paths,
+    switcherDir: dir,
+    log,
+    run: (q) => {
+      fs.mkdirSync(dir, { recursive: true });
+      return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
+    },
+  });
   const actions = createActions(app);
   const menu = createMenu(app, actions);
   const accountsView = createAccountsView(app);
   const statusBar = createStatusBar(app);
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
+  const memoriesView = createMemoriesView(app);
 
   context.subscriptions.push(
     output,
     accountsView,
     statusBar,
     autoSwitch,
+    memoriesView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),
     vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),

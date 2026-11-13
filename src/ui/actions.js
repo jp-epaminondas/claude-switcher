@@ -215,4 +215,4 @@ function claudeExecutable() {
   return exe;
 }
 
-module.exports = { createActions };
+module.exports = { createActions, claudeExecutable };

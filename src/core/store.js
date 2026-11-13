@@ -4,13 +4,16 @@ const fs = require('fs');
 const path = require('path');
 const { readJson, writeFileAtomic, withDirLock } = require('./fsutil');
 
+const ACCOUNTS = { version: 1, activeId: null, accounts: [], ignored: [] };
+
 // Saved accounts live in one file shared by every VS Code window (each window runs its own
-// copy of the extension), always read fresh from disk.
+// copy of the extension), always read fresh from disk. Other state (`name`) uses the same scheme.
 class Store {
-  constructor(dir) {
+  constructor(dir, { name = 'accounts', defaults = ACCOUNTS } = {}) {
     this.dir = dir;
-    this.file = path.join(dir, 'accounts.json');
-    this.lockPath = path.join(dir, 'accounts.lock');
+    this.defaults = defaults;
+    this.file = path.join(dir, `${name}.json`);
+    this.lockPath = path.join(dir, `${name}.lock`);
   }
 
   load() {
@@ -20,7 +23,7 @@ class Store {
     } catch (e) {
       throw new Error(`não consegui ler ${this.file}: ${e.message}`);
     }
-    return { version: 1, activeId: null, accounts: [], ignored: [], ...(data || {}) };
+    return { ...structuredClone(this.defaults), ...(data || {}) };
   }
 
   // Read-modify-write under a lock, so two windows never clobber each other's tokens.
