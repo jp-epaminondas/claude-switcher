@@ -7,11 +7,8 @@ const { MIN_DAYS } = require('../core/demand');
 const { reason, reasonLines, soonestBack, fmtSessions } = require('../core/advisor');
 const { accountState, usageOf, flagOf, headline, escapeMd } = require('./present');
 
-function createAccountsView(app) {
-  const changed = new vscode.EventEmitter();
-  const provider = {
-    onDidChangeTreeData: changed.event,
-    getTreeItem: (item) => item,
+function createAccountsView(app, sidebar) {
+  const page = sidebar.page('accounts', 'Contas', {
     // An empty list shows the "add account" welcome text from package.json.
     getChildren(element) {
       if (element) return element.lines || [];
@@ -34,21 +31,18 @@ function createAccountsView(app) {
         autoSwitchItem(app.autoSwitch),
       ];
     },
-  };
-  const view = vscode.window.createTreeView('claudeSwitcher.accounts', { treeDataProvider: provider });
+  });
 
   return {
     refresh(data, now) {
-      changed.fire();
+      page.refresh();
       if (!data) return;
       const active = data.accounts.find((a) => a.id === data.activeId);
       const out = data.accounts.filter((a) => outStatus(a.usage, now, data.outAt).out).length;
-      view.description = active ? active.label : '';
-      view.badge = out ? { value: out, tooltip: `${out} ${out > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined;
-    },
-    dispose() {
-      view.dispose();
-      changed.dispose();
+      page.decorate({
+        description: active ? active.label : '',
+        badge: out ? { value: out, tooltip: `${out} ${out > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined,
+      });
     },
   };
 }

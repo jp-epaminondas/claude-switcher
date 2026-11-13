@@ -11,6 +11,7 @@ const { adviseWithPlan } = require('./core/planner');
 const { Curator } = require('./core/curator');
 const { runClaude } = require('./core/claudeCli');
 const { createActions, claudeExecutable } = require('./ui/actions');
+const { createSidebar } = require('./ui/sidebar');
 const { createAccountsView } = require('./ui/accountsView');
 const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
@@ -57,14 +58,15 @@ function activate(context) {
   });
   const actions = createActions(app);
   const menu = createMenu(app, actions);
-  const accountsView = createAccountsView(app);
+  const sidebar = createSidebar();
+  const accountsView = createAccountsView(app, sidebar); // first page: the one that opens
   const statusBar = createStatusBar(app);
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
-  const memoriesView = createMemoriesView(app);
+  const memoriesView = createMemoriesView(app, sidebar);
 
   context.subscriptions.push(
     output,
-    accountsView,
+    sidebar,
     statusBar,
     autoSwitch,
     memoriesView,

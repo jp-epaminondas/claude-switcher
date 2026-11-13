@@ -1,6 +1,6 @@
 'use strict';
 
-// Side bar list "Memórias": preferences Claude Code saved again in several projects, to join
+// Side bar page "Memórias": preferences Claude Code saved again in several projects, to join
 // into the global CLAUDE.md, and that CLAUDE.md piece by piece, to take things out of it.
 const vscode = require('vscode');
 const fs = require('fs');
@@ -8,7 +8,6 @@ const path = require('path');
 const md = require('../core/claudeMd');
 const { fmtClock } = require('../core/usage');
 
-const VIEW = 'claudeSwitcher.memories';
 const { Collapsed, Expanded, None } = vscode.TreeItemCollapsibleState;
 const BACKUP_NOTE = 'Fica uma cópia de tudo em ~/.claude-switcher/memory-backup.';
 
@@ -20,15 +19,11 @@ function line(id, label, iconId, extra = {}) {
   return Object.assign(new vscode.TreeItem(label, None), { id, iconPath: iconId ? icon(iconId) : undefined }, extra);
 }
 
-function createMemoriesView(app) {
+function createMemoriesView(app, sidebar) {
   const { curator, paths, log } = app;
-  const changed = new vscode.EventEmitter();
-  const refresh = () => changed.fire();
   let state = null; // what the list shows right now
 
-  const provider = {
-    onDidChangeTreeData: changed.event,
-    getTreeItem: (item) => item,
+  const page = sidebar.page('memories', 'Memórias', {
     getChildren(element) {
       if (element) return element.children || [];
       try {
@@ -37,23 +32,27 @@ function createMemoriesView(app) {
         return [new vscode.TreeItem(e.message)];
       }
       const n = state.suggestions.length;
-      view.badge = n ? { value: n, tooltip: `${plural(n, 'preferência repetida', 'preferências repetidas')} para juntar` } : undefined;
+      page.decorate({
+        description: n ? `${n} para juntar` : '',
+        badge: n ? { value: n, tooltip: `${plural(n, 'preferência repetida', 'preferências repetidas')} para juntar` } : undefined,
+      });
       return [suggestionsNode(state), claudeMdNode(state, paths)];
     },
-  };
-  const view = vscode.window.createTreeView(VIEW, { treeDataProvider: provider });
+    onShow: () => analyzeIfStale(),
+  });
+  const refresh = page.refresh;
 
   async function analyze(force = false) {
     const running = curator.analyze({ force });
     refresh();
     try {
-      await vscode.window.withProgress({ location: { viewId: VIEW } }, () => running);
+      await vscode.window.withProgress({ location: { viewId: sidebar.VIEW } }, () => running);
     } catch {} // the error shows up in the list
     refresh();
   }
 
-  // Opening the panel analyzes again when the memories changed. A failure waits for a click,
-  // so a broken Claude isn't asked over and over.
+  // Coming to this page analyzes again when the memories changed: the only time it costs
+  // tokens on its own. A failure waits for a click, so a broken Claude isn't asked over and over.
   function analyzeIfStale() {
     let v;
     try {
@@ -164,9 +163,6 @@ function createMemoriesView(app) {
   for (const file of watched) fs.watchFile(file, { interval: 3000 }, refresh);
 
   const disposables = [
-    view,
-    changed,
-    view.onDidChangeVisibility((e) => e.visible && analyzeIfStale()),
     vscode.commands.registerCommand('claudeSwitcher.memories.analyze', () => analyze(true)),
     vscode.commands.registerCommand('claudeSwitcher.memories.openClaudeMd', openClaudeMd),
     vscode.commands.registerCommand('claudeSwitcher.memories.merge', merge),
@@ -174,7 +170,6 @@ function createMemoriesView(app) {
     vscode.commands.registerCommand('claudeSwitcher.memories.clearIgnored', clearIgnored),
     vscode.commands.registerCommand('claudeSwitcher.memories.remove', remove),
   ];
-  if (view.visible) analyzeIfStale();
 
   return {
     refresh,

@@ -105,7 +105,7 @@ function createAutoSwitch(app) {
       const when = soon ? ` A primeira a voltar é ${soon.account.label}, ${fmtClock(soon.until)} (${fmtIn(soon.until)}).` : '';
       vscode.window
         .showWarningMessage(`${from} esgotou e nenhuma outra conta está disponível agora.${when}`, 'Ver contas')
-        .then((choice) => choice && vscode.commands.executeCommand('claudeSwitcher.accounts.focus'));
+        .then((choice) => choice && vscode.commands.executeCommand('claudeSwitcher.showAccounts'));
     } else {
       log(`sessão ${req.sessionId} esgotou várias contas seguidas; parei de continuar sozinho`);
       vscode.window.showWarningMessage('Claude Switcher: a conversa bateu no limite em várias contas seguidas, então parei de continuar sozinho.');

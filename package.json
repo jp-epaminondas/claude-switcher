@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -36,12 +36,6 @@
           "id": "claudeSwitcher.accounts",
           "name": "Contas",
           "icon": "media/switcher.svg"
-        },
-        {
-          "id": "claudeSwitcher.memories",
-          "name": "Memórias",
-          "visibility": "collapsed",
-          "icon": "media/switcher.svg"
         }
       ]
     },
@@ -54,95 +48,105 @@
     "menus": {
       "view/title": [
         {
+          "command": "claudeSwitcher.showMemories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "group": "navigation@0"
+        },
+        {
+          "command": "claudeSwitcher.showAccounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "group": "navigation@0"
+        },
+        {
           "command": "claudeSwitcher.switchNext",
-          "when": "view == claudeSwitcher.accounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
           "group": "navigation@1"
         },
         {
           "command": "claudeSwitcher.addAccount",
-          "when": "view == claudeSwitcher.accounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
           "group": "navigation@2"
         },
         {
           "command": "claudeSwitcher.refresh",
-          "when": "view == claudeSwitcher.accounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
           "group": "navigation@3"
         },
         {
           "command": "claudeSwitcher.memories.openClaudeMd",
-          "when": "view == claudeSwitcher.memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
           "group": "navigation@1"
         },
         {
           "command": "claudeSwitcher.memories.analyze",
-          "when": "view == claudeSwitcher.memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
           "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
           "command": "claudeSwitcher.useAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem =~ /^(account|advice)$/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^(account|advice)$/",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.renameAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
           "group": "inline@2"
         },
         {
           "command": "claudeSwitcher.removeAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
           "group": "inline@3"
         },
         {
           "command": "claudeSwitcher.useAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem == account",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem == account",
           "group": "1_account@1"
         },
         {
           "command": "claudeSwitcher.renameAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
           "group": "1_account@2"
         },
         {
           "command": "claudeSwitcher.removeAccount",
-          "when": "view == claudeSwitcher.accounts && viewItem =~ /^account/",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
           "group": "1_account@3"
         },
         {
           "command": "claudeSwitcher.memories.merge",
-          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == suggestion",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.memories.ignore",
-          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == suggestion",
           "group": "inline@2"
         },
         {
           "command": "claudeSwitcher.memories.merge",
-          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == suggestion",
           "group": "1_memory@1"
         },
         {
           "command": "claudeSwitcher.memories.ignore",
-          "when": "view == claudeSwitcher.memories && viewItem == suggestion",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == suggestion",
           "group": "1_memory@2"
         },
         {
           "command": "claudeSwitcher.memories.remove",
-          "when": "view == claudeSwitcher.memories && viewItem == claudeBlock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == claudeBlock",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.memories.remove",
-          "when": "view == claudeSwitcher.memories && viewItem == claudeBlock",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == claudeBlock",
           "group": "1_memory@1"
         },
         {
           "command": "claudeSwitcher.memories.openClaudeMd",
-          "when": "view == claudeSwitcher.memories && viewItem == claudeMdRoot",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == claudeMdRoot",
           "group": "inline@1"
         }
       ],
@@ -260,6 +264,18 @@
         "title": "Remover do CLAUDE.md",
         "category": "Claude Switcher",
         "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.showAccounts",
+        "title": "Ir para Contas",
+        "category": "Claude Switcher",
+        "icon": "$(account)"
+      },
+      {
+        "command": "claudeSwitcher.showMemories",
+        "title": "Ir para Memórias",
+        "category": "Claude Switcher",
+        "icon": "$(book)"
       }
     ],
     "configuration": {

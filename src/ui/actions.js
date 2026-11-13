@@ -10,7 +10,7 @@ const { reason, soonestBack } = require('../core/advisor');
 function createActions(app) {
   const { store, sw, log } = app;
 
-  const showAccounts = () => vscode.commands.executeCommand('claudeSwitcher.accounts.focus');
+  const showAccounts = () => vscode.commands.executeCommand('claudeSwitcher.showAccounts');
 
   async function doSwitch(id, prefix = '') {
     let result;
