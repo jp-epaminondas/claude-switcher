@@ -8,8 +8,8 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem duas páginas, uma de cada vez: **Contas** e **Memórias**. Para trocar, clique no primeiro botão do título (as camadas) e escolha a página no menu; a atual aparece com ✓. Ele sempre abre em Contas.
-- No título da página Contas ficam também: ⇄ trocar para a próxima disponível, ＋ adicionar conta e ⟳ atualizar o uso.
+- O painel tem duas páginas, uma de cada vez: **Contas** e **Memórias**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
+- No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
 **Barra de status (lado esquerdo):** mostra a conta em uso e o uso das 5h, por exemplo `Conta 1 · 41%`.
@@ -56,7 +56,7 @@ Quando a recomendada não é a conta em uso, passe o mouse no item ⭐ para ver 
 **Regra:** use primeiro a conta cuja semana renova antes. O que sobra nela é perdido na renovação, enquanto as outras guardam o saldo para depois. Esse é o melhor critério para não desperdiçar limite, e funciona melhor do que reagir só no último dia, quando o limite de 5h e as horas de sono já não deixam gastar tudo. Algumas regras complementam essa:
 - Contas esgotadas, quase vazias (menos de 5% da semana) ou com a semana ainda não iniciada vão para o fim da fila.
 - Se a conta em uso renova até 3h depois da melhor, a recomendação é continuar nela. Não vale trocar por tão pouco.
-- O botão ⇄, o aviso de "esgotou" e o autoswitcher usam essa mesma ordem.
+- "Trocar para a próxima conta", o aviso de "esgotou" e o autoswitcher usam essa mesma ordem.
 
 **🔥 Vai perder uso:** marca a conta que ainda tem pelo menos 10% da semana sobrando e se encaixa num destes casos:
 - falta até 24h para a semana dela renovar (ajuste em `claudeSwitcher.burnWindowHours`);
@@ -93,7 +93,7 @@ A extensão aprende o seu ritmo de uso e prevê se as contas aguentam. No painel
 - **Hoje entra no cálculo:** se o dia está sendo puxado até agora, o resto dele segue os dias passados que começaram parecidos. Na próxima hora, o ritmo atual pesa mais.
 - **Começo:** a previsão da semana começa depois de 3 dias com dados. Antes disso, ela só prevê as próximas 2h pelo ritmo atual. Dias com o VS Code fechado quase o tempo todo (menos de 6h observadas) ficam de fora.
 
-**Qual conta usar:** o ⭐ continua seguindo a regra de não desperdiçar a semana. Ele só muda quando outra conta melhora a previsão (de "não aguenta" para "aguenta", ou sem precisar de pausas) ou evita pelo menos 15 min de espera nas próximas 24h. Nesse caso o motivo aparece no próprio ⭐. O botão ⇄ e o autoswitcher usam a mesma escolha.
+**Qual conta usar:** o ⭐ continua seguindo a regra de não desperdiçar a semana. Ele só muda quando outra conta melhora a previsão (de "não aguenta" para "aguenta", ou sem precisar de pausas) ou evita pelo menos 15 min de espera nas próximas 24h. Nesse caso o motivo aparece no próprio ⭐. "Trocar para a próxima conta" e o autoswitcher usam a mesma escolha.
 
 A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoje.
 
@@ -101,7 +101,7 @@ A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoj
 
 As memórias do Claude Code já valem para todas as contas, porque ficam em `~/.claude` e não na conta. Elas ficam presas a cada projeto, porém. Quando você corrige o Claude num projeto (por exemplo, "não coloque coautor nos commits"), ele salva isso na memória daquele projeto. Em outro projeto, ele não sabe e salva de novo.
 
-A página **Memórias** (no menu de páginas, no título do painel) só lê as memórias e só gasta tokens quando você vai para ela. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
+A página **Memórias** (no menu **…** do painel) só lê as memórias e só gasta tokens quando você vai para ela. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
 
 ```
 Repetidas nos projetos                        2 para juntar
@@ -200,7 +200,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.8.1.vsix
+code --install-extension dist/claude-switcher-0.8.2.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -48,14 +48,24 @@
     "menus": {
       "view/title": [
         {
-          "submenu": "claudeSwitcher.pages",
-          "when": "view == claudeSwitcher.accounts",
-          "group": "navigation@0"
+          "command": "claudeSwitcher.showAccounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "group": "0_pages@1"
         },
         {
-          "command": "claudeSwitcher.switchNext",
+          "command": "claudeSwitcher.showAccountsCurrent",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
-          "group": "navigation@1"
+          "group": "0_pages@1"
+        },
+        {
+          "command": "claudeSwitcher.showMemories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "group": "0_pages@2"
+        },
+        {
+          "command": "claudeSwitcher.showMemoriesCurrent",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "group": "0_pages@2"
         },
         {
           "command": "claudeSwitcher.addAccount",
@@ -181,28 +191,6 @@
         {
           "command": "claudeSwitcher.showMemoriesCurrent",
           "when": "false"
-        }
-      ],
-      "claudeSwitcher.pages": [
-        {
-          "command": "claudeSwitcher.showAccounts",
-          "when": "claudeSwitcher.page == memories",
-          "group": "1_pages@1"
-        },
-        {
-          "command": "claudeSwitcher.showAccountsCurrent",
-          "when": "claudeSwitcher.page != memories",
-          "group": "1_pages@1"
-        },
-        {
-          "command": "claudeSwitcher.showMemories",
-          "when": "claudeSwitcher.page != memories",
-          "group": "1_pages@2"
-        },
-        {
-          "command": "claudeSwitcher.showMemoriesCurrent",
-          "when": "claudeSwitcher.page == memories",
-          "group": "1_pages@2"
         }
       ]
     },
@@ -367,13 +355,6 @@
           "description": "Mostrar a conta em uso também na barra de status (lado esquerdo)."
         }
       }
-    },
-    "submenus": [
-      {
-        "id": "claudeSwitcher.pages",
-        "label": "Trocar de página",
-        "icon": "$(layers)"
-      }
-    ]
+    }
   }
 }

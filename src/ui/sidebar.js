@@ -1,7 +1,7 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas or Memórias, picked from the menu button in
-// its title. Each page brings its rows, its description and its badge; only the page on screen
+// The side bar panel, one page at a time: Contas or Memórias, picked from the panel's "…"
+// menu. Each page brings its rows, its description and its badge; only the page on screen
 // shows them.
 const vscode = require('vscode');
 
