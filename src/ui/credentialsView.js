@@ -15,7 +15,7 @@ const { parseServerMd } = require('../core/serverMd');
 const { copyIfChanged } = require('../core/claudeHook');
 const { fmtClock } = require('../core/usage');
 
-const { Collapsed, Expanded, None } = vscode.TreeItemCollapsibleState;
+const { Collapsed, None } = vscode.TreeItemCollapsibleState;
 const SCRIPT = 'segredo.js';
 const CLIPBOARD_MS = 30 * 1000;
 const REVEAL_MS = 30 * 1000;
@@ -37,7 +37,7 @@ function createCredentialsView(app, sidebar) {
   const uses = [];
   const revealed = new Map(); // fieldId -> timer: secret fields shown in the list for a while
 
-  const page = sidebar.page('credentials', 'Credenciais', { getChildren });
+  const page = sidebar.page('credentials', 'Credenciais', { getChildren, collapseOnShow: true });
   const refresh = () => {
     page.decorate({ description: !vault.exists() ? '' : vault.unlocked ? `🔓 até ${fmtClock(lockAt)}` : '🔒 trancado' });
     vscode.commands.executeCommand('setContext', 'claudeSwitcher.vaultUnlocked', vault.unlocked);

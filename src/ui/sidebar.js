@@ -13,10 +13,24 @@ function createSidebar() {
   const pages = new Map();
   let current = null;
 
+  // A page with collapseOnShow gets new ids each time it comes on screen, so VS Code forgets
+  // what was expanded and every row starts collapsed. Children are built with their parent,
+  // so prefixing the whole tree from the top is enough.
+  const prefixIds = (items, prefix) => {
+    for (const it of items) {
+      if (it.id) it.id = prefix + it.id;
+      if (Array.isArray(it.children)) prefixIds(it.children, prefix);
+    }
+    return items;
+  };
   const provider = {
     onDidChangeTreeData: changed.event,
     getTreeItem: (item) => item,
-    getChildren: (element) => (current ? current.getChildren(element) : []),
+    getChildren(element) {
+      if (!current) return [];
+      if (element || !current.collapseOnShow) return current.getChildren(element);
+      return prefixIds(current.getChildren(), `${current.shownCount}:`);
+    },
   };
   const view = vscode.window.createTreeView(VIEW, { treeDataProvider: provider });
 
@@ -24,6 +38,15 @@ function createSidebar() {
     view.title = current.title;
     view.description = current.description;
     view.badge = current.badge;
+  }
+
+  // The page comes on screen: collapsed again if it asks for it, then its onShow.
+  function shown(page) {
+    if (page.collapseOnShow) {
+      page.shownCount++;
+      changed.fire();
+    }
+    page.onShow();
   }
 
   function show(name) {
@@ -34,16 +57,19 @@ function createSidebar() {
     vscode.commands.executeCommand('setContext', CONTEXT, name);
     apply();
     if (switched) changed.fire();
-    if (view.visible) page.onShow();
+    if (view.visible) shown(page);
   }
 
-  // Registers a page. `getChildren` builds its rows; `onShow` runs whenever it comes on screen.
-  function page(name, title, { getChildren, onShow = () => {} }) {
+  // Registers a page. `getChildren` builds its rows; `onShow` runs whenever it comes on screen;
+  // `collapseOnShow` makes every row start collapsed each time.
+  function page(name, title, { getChildren, onShow = () => {}, collapseOnShow = false }) {
     const p = {
       name,
       title,
       getChildren,
       onShow,
+      collapseOnShow,
+      shownCount: 0,
       description: '',
       badge: undefined,
       refresh: () => p === current && changed.fire(),
@@ -68,7 +94,7 @@ function createSidebar() {
   const disposables = [
     view,
     changed,
-    view.onDidChangeVisibility((e) => e.visible && current && current.onShow()),
+    view.onDidChangeVisibility((e) => e.visible && current && shown(current)),
     // Each page twice: plain, and with ✓ for the "…" menu while it is the page on screen.
     ...[
       ['Accounts', 'accounts'],

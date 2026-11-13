@@ -8,7 +8,7 @@ const path = require('path');
 const md = require('../core/claudeMd');
 const { fmtClock } = require('../core/usage');
 
-const { Collapsed, Expanded, None } = vscode.TreeItemCollapsibleState;
+const { Collapsed, None } = vscode.TreeItemCollapsibleState;
 const BACKUP_NOTE = 'Fica uma cópia de tudo em ~/.claude-switcher/memory-backup.';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -40,6 +40,7 @@ function createMemoriesView(app, sidebar) {
     },
     // Coming to the page only re-reads the files; the analysis (tokens) runs on a click.
     onShow: () => page.refresh(),
+    collapseOnShow: true,
   });
   const refresh = page.refresh;
 
@@ -235,7 +236,7 @@ function createMemoriesView(app, sidebar) {
 // "Repetidas nos projetos": what Claude found, plus how fresh that is.
 function suggestionsNode(s) {
   const n = s.suggestions.length;
-  const node = new vscode.TreeItem('Repetidas nos projetos', Expanded);
+  const node = new vscode.TreeItem('Repetidas nos projetos', Collapsed);
   node.id = 'suggestions';
   node.iconPath = icon('lightbulb', n ? 'charts.yellow' : undefined);
   node.description = s.running ? 'analisando…' : n ? `${n} para juntar` : '';
@@ -326,7 +327,7 @@ function claudeMdNode(s, paths) {
 
   const toItem = (b) => {
     const kids = doc.blocks.filter((x) => x.parent === b);
-    const t = new vscode.TreeItem(b.kind === 'section' ? b.title : summary(b.text), b.kind === 'section' ? (kids.length ? Expanded : None) : None);
+    const t = new vscode.TreeItem(b.kind === 'section' ? b.title : summary(b.text), b.kind === 'section' ? (kids.length ? Collapsed : None) : None);
     t.id = `claudeMd.${b.start}.${b.kind}`;
     t.ref = md.refOf(b);
     t.blockText = b.text;
@@ -349,7 +350,7 @@ function claudeMdNode(s, paths) {
     return t;
   };
 
-  const node = new vscode.TreeItem('CLAUDE.md global', Expanded);
+  const node = new vscode.TreeItem('CLAUDE.md global', Collapsed);
   node.id = 'claudeMd';
   node.contextValue = 'claudeMdRoot';
   node.iconPath = icon('book');
