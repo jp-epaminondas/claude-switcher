@@ -150,6 +150,68 @@ function createMemoriesView(app, sidebar) {
     refresh();
   }
 
+  // "Nova instrução": the user writes what they want, Claude words it and picks the section,
+  // and nothing is written before the user sees it.
+  async function addInstruction() {
+    const request = await vscode.window.showInputBox({
+      title: 'Nova instrução no CLAUDE.md global',
+      prompt: 'Escreva do seu jeito o que o Claude deve fazer, ou nunca fazer, em todos os projetos. Ele escreve a instrução e mostra antes de gravar.',
+      placeHolder: 'ex.: quando eu pedir deploy, confere antes se tem commit pendente',
+      ignoreFocusOut: true,
+    });
+    if (!request || !request.trim()) return;
+    let draft;
+    try {
+      draft = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'O Claude está escrevendo a instrução…' },
+        () => curator.draftInstruction(request),
+      );
+    } catch (e) {
+      log(`nova instrução: ${e.message}`);
+      vscode.window.showErrorMessage(`Claude Switcher: não consegui escrever a instrução (${e.message}).`);
+      return;
+    }
+    const parts = [`Seção: ${draft.section}${draft.newSection ? ' (nova)' : ''}`, '', `- ${draft.rule}`];
+    if (draft.replaces) parts.push('', 'Substitui:', `- ${draft.replaces}`);
+    if (draft.note) parts.push('', draft.note);
+    const choice = await vscode.window.showInformationMessage(
+      draft.projectOnly ? 'Isso parece ser de um projeto só. Pôr no CLAUDE.md global mesmo assim?' : 'Adicionar ao CLAUDE.md global?',
+      { modal: true, detail: parts.join('\n') },
+      'Adicionar',
+      'Editar o texto',
+    );
+    if (!choice) return;
+    let rule = draft.rule;
+    if (choice === 'Editar o texto') {
+      rule = await vscode.window.showInputBox({ title: `Instrução (seção ${draft.section})`, value: draft.rule, ignoreFocusOut: true, validateInput: (v) => (v.trim() ? null : 'Escreva a instrução') });
+      if (!rule) return;
+    }
+    let done;
+    try {
+      done = await curator.addInstruction({ rule, section: draft.section, replaces: draft.replaces });
+    } catch (e) {
+      vscode.window.showErrorMessage(`Claude Switcher: ${e.message}`);
+      return refresh();
+    }
+    refresh();
+    if (!done) {
+      vscode.window.showInformationMessage('Essa instrução já está no CLAUDE.md global.');
+      return;
+    }
+    log(`instrução adicionada em "${draft.section}": ${rule}`);
+    const next = await vscode.window.showInformationMessage(`Instrução adicionada em "${draft.section}".`, 'Abrir CLAUDE.md', 'Desfazer');
+    if (next === 'Abrir CLAUDE.md') openClaudeMd();
+    else if (next === 'Desfazer') {
+      try {
+        await curator.undoInstruction(done);
+        vscode.window.showInformationMessage('Desfeito: o CLAUDE.md voltou a como estava.');
+      } catch (e) {
+        vscode.window.showErrorMessage(`Claude Switcher: ${e.message}`);
+      }
+      refresh();
+    }
+  }
+
   async function openClaudeMd() {
     const file = md.claudeMdPath(paths);
     if (!fs.existsSync(file)) {
@@ -169,6 +231,7 @@ function createMemoriesView(app, sidebar) {
     vscode.commands.registerCommand('claudeSwitcher.memories.ignore', ignore),
     vscode.commands.registerCommand('claudeSwitcher.memories.clearIgnored', clearIgnored),
     vscode.commands.registerCommand('claudeSwitcher.memories.remove', remove),
+    vscode.commands.registerCommand('claudeSwitcher.memories.addInstruction', addInstruction),
   ];
 
   return {
@@ -304,9 +367,12 @@ function claudeMdNode(s, paths) {
   node.description = plural(items, 'item', 'itens');
   node.tooltip = `${file}\n\nVale para todos os projetos e todas as contas. Remova aqui o que não quer mais.`;
   const top = doc.blocks.filter((b) => !b.parent);
-  node.children = top.length
-    ? top.map(toItem)
-    : [line('claudeMd.empty', 'Vazio', 'info', { tooltip: 'Junte uma sugestão acima para começar, ou abra o arquivo e escreva.' })];
+  const add = line('claudeMd.add', 'Nova instrução…', 'add', {
+    description: 'escreva do seu jeito',
+    tooltip: 'Diga o que o Claude deve fazer (ou nunca fazer). O Claude escreve a instrução, escolhe a seção e mostra antes de gravar.',
+    command: { command: 'claudeSwitcher.memories.addInstruction', title: 'Nova instrução' },
+  });
+  node.children = [add, ...top.map(toItem)];
   return node;
 }
 

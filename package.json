@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -121,6 +121,11 @@
           "command": "claudeSwitcher.cred.changeMaster",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
           "group": "1_vault@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.addInstruction",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
@@ -538,6 +543,12 @@
         "command": "claudeSwitcher.cred.changeMaster",
         "title": "Trocar a senha mestra",
         "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.memories.addInstruction",
+        "title": "Nova instrução no CLAUDE.md",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
       }
     ],
     "configuration": {

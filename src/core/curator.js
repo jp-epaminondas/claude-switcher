@@ -11,6 +11,27 @@ const mem = require('./memories');
 
 const KEEP_MERGED = 50;
 
+const INSTRUCTION_PROMPT = `Você escreve instruções para o CLAUDE.md global de um usuário do Claude Code. Esse arquivo vale em todos os projetos dele e é lido no começo de toda conversa.
+Você recebe o arquivo atual e um pedido escrito livremente pelo usuário. Transforme o pedido numa instrução e diga onde ela entra.
+
+- rule: a instrução em português do Brasil, em uma ou duas frases no imperativo, clara e sem ambiguidade. Diga o que fazer (e quando), não o que o usuário pediu. Sem citar o pedido, sem markdown de lista.
+- section: o título de uma seção existente onde ela se encaixa, copiado exatamente como está no arquivo. Se nenhuma servir, um título novo e curto.
+- replaces: se um item que já existe diz o mesmo ou o contrário, copie o texto exato desse item (sem o "- " do começo); senão, "".
+- projectOnly: true quando o pedido só faz sentido num projeto, servidor ou sistema específico (no global ele valeria em todos).
+- note: uma frase curta para o usuário: onde entrou e por quê, o que substitui, ou por que parece ser de um projeto só.`;
+
+const INSTRUCTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    rule: { type: 'string' },
+    section: { type: 'string' },
+    replaces: { type: 'string' },
+    projectOnly: { type: 'boolean' },
+    note: { type: 'string' },
+  },
+  required: ['rule', 'section', 'replaces', 'projectOnly', 'note'],
+};
+
 class Curator {
   // `run({ prompt, system, schema })` asks Claude and resolves to the structured answer.
   constructor({ paths, switcherDir, run, log = () => {} }) {
@@ -119,6 +140,48 @@ class Curator {
       this.keepFresh(d, wasFresh);
       return { id: record.id, rule: written, removed: files.length, backupDir };
     });
+  }
+
+  // Claude turns a free-form request ("quando eu pedir deploy, confira antes...") into an
+  // instruction for CLAUDE.md, with the section it belongs in and the item it replaces.
+  async draftInstruction(request) {
+    const text = md.readClaudeMd(this.paths);
+    const prompt = ['## CLAUDE.md global atual', '', text.trim() || '(vazio)', '', '## Pedido do usuário', '', String(request).trim()].join('\n');
+    const out = await this.run({ prompt, system: INSTRUCTION_PROMPT, schema: INSTRUCTION_SCHEMA });
+    const rule = md.normalizeRule((out && out.rule) || '');
+    if (!rule) throw new Error('o Claude não devolveu uma instrução');
+    const sections = md.parseClaudeMd(text).blocks.filter((b) => b.kind === 'section');
+    const wanted = String((out && out.section) || '').replace(/^#+\s*/, '').trim() || md.PREFS_TITLE;
+    const existing = sections.find((s) => s.title.trim().toLowerCase() === wanted.toLowerCase());
+    const replaced = out.replaces ? md.findItem(text, out.replaces) : null;
+    return {
+      rule,
+      section: existing ? existing.title : wanted,
+      newSection: !existing,
+      replaces: replaced ? md.normalizeRule(replaced.text) : null,
+      projectOnly: !!out.projectOnly,
+      note: String(out.note || '').trim(),
+    };
+  }
+
+  // Writes the instruction (taking out the item it replaces). Returns what undo needs.
+  async addInstruction({ rule, section, replaces = null }) {
+    const before = md.readClaudeMd(this.paths);
+    let text = before;
+    if (replaces) {
+      const old = md.findItem(text, replaces);
+      if (old) text = md.removeBlock(text, md.refOf(old)) ?? text;
+    }
+    text = md.addRule(text, rule, section);
+    if (text === before) return null;
+    await md.writeClaudeMd(this.paths, this.switcherDir, text);
+    return { before, after: text };
+  }
+
+  // Puts CLAUDE.md back as it was, unless it changed since.
+  async undoInstruction({ before, after }) {
+    if (md.readClaudeMd(this.paths) !== after) throw new Error('o CLAUDE.md mudou depois disso; desfaça pelo botão de remover');
+    await md.writeClaudeMd(this.paths, this.switcherDir, before);
   }
 
   async ignore(key) {

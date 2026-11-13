@@ -232,3 +232,39 @@ test('a failed analysis is reported until something changes', async () => {
   fs.appendFileSync(path.join(w.alpha, 'no-coauthor.md'), 'mais\n');
   assert.equal(w.curator.view().error, null);
 });
+
+test('a new instruction: Claude words it, it lands in its section, replacing what it contradicts', async () => {
+  const w = world();
+  fs.writeFileSync(path.join(w.t.paths.configDir, 'CLAUDE.md'), `${GRAPHIFY}\n# Preferências\n\n- Responder em inglês.\n`);
+  const prompts = [];
+  w.curator.run = async ({ prompt, schema }) => {
+    prompts.push(prompt);
+    assert.deepEqual(schema.required, ['rule', 'section', 'replaces', 'projectOnly', 'note']);
+    return { rule: '- Responda sempre em português do Brasil.', section: '# preferências', replaces: 'Responder em inglês.', projectOnly: false, note: 'Troca a regra do idioma.' };
+  };
+  const draft = await w.curator.draftInstruction('quero respostas em português');
+  assert.ok(prompts[0].includes('quero respostas em português') && prompts[0].includes('- Responder em inglês.'));
+  assert.deepEqual(draft, {
+    rule: 'Responda sempre em português do Brasil.',
+    section: 'Preferências', // the existing title, as written in the file
+    newSection: false,
+    replaces: 'Responder em inglês.',
+    projectOnly: false,
+    note: 'Troca a regra do idioma.',
+  });
+  const done = await w.curator.addInstruction(draft);
+  assert.equal(w.claudeMd(), `${GRAPHIFY}\n# Preferências\n\n- Responda sempre em português do Brasil.\n`);
+  assert.equal(await w.curator.addInstruction(draft), null, 'already there');
+
+  await w.curator.undoInstruction(done);
+  assert.ok(w.claudeMd().includes('- Responder em inglês.'));
+  await assert.rejects(w.curator.undoInstruction(done), /mudou/);
+
+  // A section that doesn't exist yet is created; a "replaces" that isn't in the file is ignored.
+  w.curator.run = async () => ({ rule: 'Antes de deploy, conferir commits pendentes.', section: 'Deploy', replaces: 'não existe', projectOnly: true, note: '' });
+  const d2 = await w.curator.draftInstruction('deploy');
+  assert.equal(d2.newSection, true);
+  assert.equal(d2.replaces, null);
+  await w.curator.addInstruction(d2);
+  assert.ok(w.claudeMd().endsWith('# Deploy\n\n- Antes de deploy, conferir commits pendentes.\n'));
+});

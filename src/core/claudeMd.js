@@ -156,17 +156,17 @@ function tidy(lines, at) {
   while (lines.length > 1 && blank(lines[lines.length - 1]) && blank(lines[lines.length - 2])) lines.pop();
 }
 
-// `text` with `rule` as the last item of the Preferências section, created at the end when
-// missing. Unchanged when the same rule is already in that section.
-function addRule(text, rule) {
+// `text` with `rule` as the last item of section `title` (Preferências by default), created
+// at the end when missing. Unchanged when the same rule is already in that section.
+function addRule(text, rule, title = PREFS_TITLE) {
   const bullet = `- ${normalizeRule(rule)}`;
   const doc = parseClaudeMd(text);
   const lines = doc.lines.slice();
-  const sec = doc.blocks.find((b) => b.kind === 'section' && b.title.trim().toLowerCase() === PREFS_TITLE.toLowerCase());
+  const sec = doc.blocks.find((b) => b.kind === 'section' && b.title.trim().toLowerCase() === String(title).trim().toLowerCase());
   if (!sec) {
     while (lines.length && blank(lines[lines.length - 1])) lines.pop();
     if (lines.length) lines.push('');
-    lines.push(`# ${PREFS_TITLE}`, '', bullet, '');
+    lines.push(`# ${String(title).trim()}`, '', bullet, '');
     return lines.join(doc.eol);
   }
   const inSection = doc.blocks.filter((b) => b.kind === 'item' && b.start > sec.start && b.end <= sec.end);
@@ -178,8 +178,15 @@ function addRule(text, rule) {
   return lines.join(doc.eol);
 }
 
+// The item whose text is `rule` (list marker and spacing aside), anywhere in the file.
+function findItem(text, rule) {
+  const want = normalizeRule(rule);
+  return parseClaudeMd(text).blocks.find((b) => b.kind === 'item' && normalizeRule(b.text) === want) || null;
+}
+
 module.exports = {
   PREFS_TITLE,
+  findItem,
   claudeMdPath,
   readClaudeMd,
   writeClaudeMd,

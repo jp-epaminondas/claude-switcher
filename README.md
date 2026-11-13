@@ -116,6 +116,7 @@ CLAUDE.md global                              3 itens
 - **Análise:** ao abrir a página, o Claude (modelo Haiku, pelo `claude -p`) lê as memórias de preferência de todos os projetos e agrupa as que dizem a mesma coisa, mesmo com outras palavras ou em outra língua. Entram só as memórias dos tipos `feedback` e `user`. Fatos de um projeto, como servidores e telas, ficam onde estão. A análise usa um pouco do limite da conta em uso e só roda de novo quando alguma memória ou o `CLAUDE.md` muda. O botão ⟳ força uma nova análise.
 - **Juntar (⑂):** mostra a regra para você editar, grava na seção `# Preferências` do `CLAUDE.md` global e apaga as cópias dos projetos, com os links delas no `MEMORY.md`. A notificação tem **Desfazer**. Se a regra já estava no `CLAUDE.md`, Juntar só apaga as cópias.
 - **Ignorar (✕):** some com a sugestão. Clique em "sugestões ignoradas" para mostrar de novo.
+- **Nova instrução (＋):** escreva do seu jeito o que o Claude deve fazer, como "quando eu pedir deploy, confere antes se tem commit pendente". O Claude escreve a instrução, escolhe a seção (ou cria uma), diz se ela substitui um item que já existe e avisa quando o pedido parece ser de um projeto só. Nada é gravado antes de você ver a prévia, e dá para editar o texto e desfazer.
 - **Remover (🗑):** qualquer seção ou item do `CLAUDE.md` global sai por aqui. Se a regra veio de uma junção, dá para remover e devolver as memórias aos projetos.
 - Clique numa memória ou num item para abri-lo no editor.
 - Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/`: as memórias apagadas e as últimas 20 versões do `CLAUDE.md`.
@@ -228,7 +229,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.9.0.vsix
+code --install-extension dist/claude-switcher-0.9.1.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.
