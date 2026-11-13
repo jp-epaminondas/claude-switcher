@@ -101,7 +101,7 @@ A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoj
 
 As memórias do Claude Code já valem para todas as contas, porque ficam em `~/.claude` e não na conta. Elas ficam presas a cada projeto, porém. Quando você corrige o Claude num projeto (por exemplo, "não coloque coautor nos commits"), ele salva isso na memória daquele projeto. Em outro projeto, ele não sabe e salva de novo.
 
-A página **Memórias** (no menu **…** do painel) só lê as memórias e só gasta tokens quando você vai para ela. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
+A página **Memórias** (no menu **…** do painel) só lê as memórias e só gasta tokens quando você clica para analisar. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
 
 ```
 Repetidas nos projetos                        2 para juntar
@@ -113,7 +113,7 @@ CLAUDE.md global                              3 itens
     ⑂ Uma conferência rápida, depois parar    juntada
 ```
 
-- **Análise:** ao abrir a página, o Claude (modelo Haiku, pelo `claude -p`) lê as memórias de preferência de todos os projetos e agrupa as que dizem a mesma coisa, mesmo com outras palavras ou em outra língua. Entram só as memórias dos tipos `feedback` e `user`. Fatos de um projeto, como servidores e telas, ficam onde estão. A análise usa um pouco do limite da conta em uso e só roda de novo quando alguma memória ou o `CLAUDE.md` muda. O botão ⟳ força uma nova análise.
+- **Análise:** ao clicar no ⟳ do título, o Claude (modelo Haiku, pelo `claude -p`) lê as memórias de preferência de todos os projetos e agrupa as que dizem a mesma coisa, mesmo com outras palavras ou em outra língua. Entram só as memórias dos tipos `feedback` e `user`. Fatos de um projeto, como servidores e telas, ficam onde estão. A análise usa um pouco do limite da conta em uso e só roda quando você clica. Quando alguma memória ou o `CLAUDE.md` muda depois da última análise, aparece o aviso "As memórias mudaram desde a análise", que também analisa ao ser clicado.
 - **Juntar (⑂):** mostra a regra para você editar, grava na seção `# Preferências` do `CLAUDE.md` global e apaga as cópias dos projetos, com os links delas no `MEMORY.md`. A notificação tem **Desfazer**. Se a regra já estava no `CLAUDE.md`, Juntar só apaga as cópias.
 - **Ignorar (✕):** some com a sugestão. Clique em "sugestões ignoradas" para mostrar de novo.
 - **Nova instrução (＋):** escreva do seu jeito o que o Claude deve fazer, como "quando eu pedir deploy, confere antes se tem commit pendente". O Claude escreve a instrução, escolhe a seção (ou cria uma), diz se ela substitui um item que já existe e avisa quando o pedido parece ser de um projeto só. Nada é gravado antes de você ver a prévia, e dá para editar o texto e desfazer.
@@ -229,7 +229,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.9.2.vsix
+code --install-extension dist/claude-switcher-0.9.3.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

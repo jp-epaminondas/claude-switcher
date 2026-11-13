@@ -38,7 +38,8 @@ function createMemoriesView(app, sidebar) {
       });
       return [suggestionsNode(state), claudeMdNode(state, paths)];
     },
-    onShow: () => analyzeIfStale(),
+    // Coming to the page only re-reads the files; the analysis (tokens) runs on a click.
+    onShow: () => page.refresh(),
   });
   const refresh = page.refresh;
 
@@ -49,18 +50,6 @@ function createMemoriesView(app, sidebar) {
       await vscode.window.withProgress({ location: { viewId: sidebar.VIEW } }, () => running);
     } catch {} // the error shows up in the list
     refresh();
-  }
-
-  // Coming to this page analyzes again when the memories changed: the only time it costs
-  // tokens on its own. A failure waits for a click, so a broken Claude isn't asked over and over.
-  function analyzeIfStale() {
-    let v;
-    try {
-      v = curator.view();
-    } catch {
-      return;
-    }
-    if (v.stale && !v.running && !v.error) analyze();
   }
 
   async function merge(item) {
