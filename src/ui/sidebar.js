@@ -1,7 +1,7 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas or Memórias, switched by the buttons in its
-// title. Each page brings its rows, its description and its badge; only the page on screen
+// The side bar panel, one page at a time: Contas or Memórias, picked from the menu button in
+// its title. Each page brings its rows, its description and its badge; only the page on screen
 // shows them.
 const vscode = require('vscode');
 
@@ -71,6 +71,9 @@ function createSidebar() {
     view.onDidChangeVisibility((e) => e.visible && current && current.onShow()),
     vscode.commands.registerCommand('claudeSwitcher.showAccounts', () => focus('accounts')),
     vscode.commands.registerCommand('claudeSwitcher.showMemories', () => focus('memories')),
+    // The ✓ entries of the page menu: the page already on screen.
+    vscode.commands.registerCommand('claudeSwitcher.showAccountsCurrent', () => focus('accounts')),
+    vscode.commands.registerCommand('claudeSwitcher.showMemoriesCurrent', () => focus('memories')),
   ];
 
   return {

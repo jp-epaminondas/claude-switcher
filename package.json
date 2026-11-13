@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -48,13 +48,8 @@
     "menus": {
       "view/title": [
         {
-          "command": "claudeSwitcher.showMemories",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
-          "group": "navigation@0"
-        },
-        {
-          "command": "claudeSwitcher.showAccounts",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "submenu": "claudeSwitcher.pages",
+          "when": "view == claudeSwitcher.accounts",
           "group": "navigation@0"
         },
         {
@@ -178,6 +173,36 @@
         {
           "command": "claudeSwitcher.memories.clearIgnored",
           "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.showAccountsCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.showMemoriesCurrent",
+          "when": "false"
+        }
+      ],
+      "claudeSwitcher.pages": [
+        {
+          "command": "claudeSwitcher.showAccounts",
+          "when": "claudeSwitcher.page == memories",
+          "group": "1_pages@1"
+        },
+        {
+          "command": "claudeSwitcher.showAccountsCurrent",
+          "when": "claudeSwitcher.page != memories",
+          "group": "1_pages@1"
+        },
+        {
+          "command": "claudeSwitcher.showMemories",
+          "when": "claudeSwitcher.page != memories",
+          "group": "1_pages@2"
+        },
+        {
+          "command": "claudeSwitcher.showMemoriesCurrent",
+          "when": "claudeSwitcher.page == memories",
+          "group": "1_pages@2"
         }
       ]
     },
@@ -267,15 +292,25 @@
       },
       {
         "command": "claudeSwitcher.showAccounts",
-        "title": "Ir para Contas",
+        "title": "Contas",
         "category": "Claude Switcher",
         "icon": "$(account)"
       },
       {
         "command": "claudeSwitcher.showMemories",
-        "title": "Ir para Memórias",
+        "title": "Memórias",
         "category": "Claude Switcher",
         "icon": "$(book)"
+      },
+      {
+        "command": "claudeSwitcher.showAccountsCurrent",
+        "title": "✓ Contas",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showMemoriesCurrent",
+        "title": "✓ Memórias",
+        "category": "Claude Switcher"
       }
     ],
     "configuration": {
@@ -332,6 +367,13 @@
           "description": "Mostrar a conta em uso também na barra de status (lado esquerdo)."
         }
       }
-    }
+    },
+    "submenus": [
+      {
+        "id": "claudeSwitcher.pages",
+        "label": "Trocar de página",
+        "icon": "$(layers)"
+      }
+    ]
   }
 }

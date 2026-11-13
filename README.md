@@ -8,7 +8,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem duas páginas, uma de cada vez: **Contas** e **Memórias**. O primeiro botão do título troca de página (📖 vai para Memórias, 👤 volta para Contas). Ele sempre abre em Contas.
+- O painel tem duas páginas, uma de cada vez: **Contas** e **Memórias**. Para trocar, clique no primeiro botão do título (as camadas) e escolha a página no menu; a atual aparece com ✓. Ele sempre abre em Contas.
 - No título da página Contas ficam também: ⇄ trocar para a próxima disponível, ＋ adicionar conta e ⟳ atualizar o uso.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -101,7 +101,7 @@ A previsão supõe que todas as contas são do mesmo plano, como as 5 Pro de hoj
 
 As memórias do Claude Code já valem para todas as contas, porque ficam em `~/.claude` e não na conta. Elas ficam presas a cada projeto, porém. Quando você corrige o Claude num projeto (por exemplo, "não coloque coautor nos commits"), ele salva isso na memória daquele projeto. Em outro projeto, ele não sabe e salva de novo.
 
-A página **Memórias** (botão 📖 no título do painel) só lê as memórias e só gasta tokens quando você vai para ela. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
+A página **Memórias** (no menu de páginas, no título do painel) só lê as memórias e só gasta tokens quando você vai para ela. Ela junta essas repetições no `~/.claude/CLAUDE.md`, que vale para todos os projetos:
 
 ```
 Repetidas nos projetos                        2 para juntar
@@ -200,7 +200,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.8.0.vsix
+code --install-extension dist/claude-switcher-0.8.1.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.
