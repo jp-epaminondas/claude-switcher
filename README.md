@@ -128,7 +128,7 @@ A página **Credenciais** (no menu **…** do painel) é um cofre criptografado 
 - **Cofre:** fica em `~/.claude-switcher/credenciais.vault`, criptografado com AES-256-GCM. A chave sai da sua **senha mestra** pelo scrypt, e a senha mestra não fica guardada em lugar nenhum: sem ela, o cofre não abre. Os nomes das credenciais e dos campos ficam visíveis; os valores, não.
 - **Trancado e destrancado:** a senha mestra destranca por 60 min (`claudeSwitcher.credentials.lockMinutes`), em todas as janelas do VS Code ao mesmo tempo. Depois o cofre tranca sozinho. O cadeado no título tranca na hora.
 - **Importar:** o botão de importar lê um arquivo como o `server.md` (um título, depois um valor por linha), dá nome a cada valor pelo formato (Host, Usuário, Senha, Chave…) e no fim oferece apagar o original.
-- **Na lista:** clique num campo para copiar o valor, que some da área de transferência em 30 s. Os botões editam, renomeiam e apagam. Campos não secretos (host, usuário, caminho) mostram o valor quando o cofre está destrancado.
+- **Na lista:** clique num campo para copiar o valor, que some da área de transferência em 30 s. O 👁 mostra um valor secreto na própria lista por 30 s (ou até clicar de novo, ou o cofre trancar). Os botões editam, renomeiam e apagam. Campos não secretos (host, usuário, caminho) mostram o valor quando o cofre está destrancado.
 
 **Como o Claude usa:** pelo `segredo`, que a extensão instala em `~/.claude-switcher/segredo.js`:
 
@@ -229,7 +229,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.9.1.vsix
+code --install-extension dist/claude-switcher-0.9.2.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

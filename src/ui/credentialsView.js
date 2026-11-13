@@ -18,6 +18,7 @@ const { fmtClock } = require('../core/usage');
 const { Collapsed, Expanded, None } = vscode.TreeItemCollapsibleState;
 const SCRIPT = 'segredo.js';
 const CLIPBOARD_MS = 30 * 1000;
+const REVEAL_MS = 30 * 1000;
 const KEEP_USES = 20;
 const DEFAULT_IMPORT = 'C:\\wamp64\\www\\Rota7\\.specs\\server.md';
 
@@ -34,6 +35,7 @@ function createCredentialsView(app, sidebar) {
   let lockAt = 0;
   let unlocking = null; // one prompt at a time
   const uses = [];
+  const revealed = new Map(); // fieldId -> timer: secret fields shown in the list for a while
 
   const page = sidebar.page('credentials', 'Credenciais', { getChildren });
   const refresh = () => {
@@ -51,9 +53,15 @@ function createCredentialsView(app, sidebar) {
     lockTimer = setTimeout(lockHere, Math.max(0, until - Date.now()));
   }
 
+  function hideAll() {
+    for (const t of revealed.values()) clearTimeout(t);
+    revealed.clear();
+  }
+
   function lockHere() {
     clearTimeout(lockTimer);
     lockTimer = null;
+    hideAll();
     if (vault.unlocked) log('credenciais trancadas');
     vault.lock();
     refresh();
@@ -221,9 +229,11 @@ function createCredentialsView(app, sidebar) {
       c.id = `cred.f.${e.id}.${f.id}`;
       c.entryId = e.id;
       c.fieldId = f.id;
-      c.contextValue = 'credField';
-      c.iconPath = icon(f.secret ? 'lock-small' : 'symbol-field');
-      c.description = !f.secret && value != null ? clip(value, 60) : '••••••••';
+      const shown = value != null && (!f.secret || revealed.has(f.id));
+      // credField, credFieldSecret or credFieldSecret.revealed: the eye shows on secret ones.
+      c.contextValue = f.secret ? (revealed.has(f.id) ? 'credFieldSecret.revealed' : 'credFieldSecret') : 'credField';
+      c.iconPath = icon(f.secret ? (revealed.has(f.id) ? 'eye' : 'lock-small') : 'symbol-field');
+      c.description = shown ? clip(value, 60) : '••••••••';
       c.tooltip = `${f.name}${f.secret ? ' (secreto)' : ''}\nNo segredo: {{${e.ref}.${f.ref}}}\n\nClique para copiar o valor (some da área de transferência em 30 s).`;
       c.command = { command: 'claudeSwitcher.cred.copy', title: 'Copiar', arguments: [c] };
       return c;
@@ -417,6 +427,27 @@ function createCredentialsView(app, sidebar) {
     }, CLIPBOARD_MS);
   }
 
+  // Shows a secret value in the list for REVEAL_MS (or until hidden, or the vault locks).
+  async function reveal(item) {
+    if (!item || !(await ensureUnlocked('Destrancar para ver.'))) return;
+    clearTimeout(revealed.get(item.fieldId));
+    revealed.set(
+      item.fieldId,
+      setTimeout(() => {
+        revealed.delete(item.fieldId);
+        refresh();
+      }, REVEAL_MS),
+    );
+    refresh();
+  }
+
+  function hide(item) {
+    if (!item) return;
+    clearTimeout(revealed.get(item.fieldId));
+    revealed.delete(item.fieldId);
+    refresh();
+  }
+
   async function copyRef(item) {
     if (!item) return;
     const e = vault.catalog().entries.find((x) => x.id === item.entryId);
@@ -469,6 +500,8 @@ function createCredentialsView(app, sidebar) {
     removeField,
     copy,
     copyRef,
+    reveal,
+    hide,
     changeMaster,
   };
   const disposables = [
@@ -479,6 +512,7 @@ function createCredentialsView(app, sidebar) {
   return {
     dispose() {
       clearTimeout(lockTimer);
+      hideAll();
       vault.lock();
       host.stop();
       for (const d of disposables) d.dispose();

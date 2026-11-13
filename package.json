@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -221,48 +221,58 @@
         },
         {
           "command": "claudeSwitcher.cred.copy",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.cred.editField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "inline@2"
         },
         {
           "command": "claudeSwitcher.cred.removeField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "inline@3"
         },
         {
           "command": "claudeSwitcher.cred.copy",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@1"
         },
         {
           "command": "claudeSwitcher.cred.copyRef",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@2"
         },
         {
           "command": "claudeSwitcher.cred.editField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@3"
         },
         {
           "command": "claudeSwitcher.cred.renameField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@4"
         },
         {
           "command": "claudeSwitcher.cred.toggleSecret",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@5"
         },
         {
           "command": "claudeSwitcher.cred.removeField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credField",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "1_cred@6"
+        },
+        {
+          "command": "claudeSwitcher.cred.reveal",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credFieldSecret",
+          "group": "inline@0"
+        },
+        {
+          "command": "claudeSwitcher.cred.hide",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credFieldSecret.revealed",
+          "group": "inline@0"
         }
       ],
       "commandPalette": [
@@ -340,6 +350,14 @@
         },
         {
           "command": "claudeSwitcher.cred.copyRef",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.reveal",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.hide",
           "when": "false"
         }
       ]
@@ -549,6 +567,18 @@
         "title": "Nova instrução no CLAUDE.md",
         "category": "Claude Switcher",
         "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.cred.reveal",
+        "title": "Mostrar o valor",
+        "category": "Claude Switcher",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "claudeSwitcher.cred.hide",
+        "title": "Esconder o valor",
+        "category": "Claude Switcher",
+        "icon": "$(eye-closed)"
       }
     ],
     "configuration": {
