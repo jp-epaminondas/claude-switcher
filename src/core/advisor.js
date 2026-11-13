@@ -66,7 +66,7 @@ function advise(data, now = Date.now(), { burnWindowHours = 24, minBurnPct = 10 
     const hours = resetsAt ? (resetsAt - now) / HOUR : null;
     const cost = sessionCost(acc, data.accounts);
     const sessions = cost ? left / cost : null;
-    const available = !!acc.credentials && !acc.needsLogin && !outStatus(acc.usage, now).out && !hitLimitUnchecked(acc, now);
+    const available = !!acc.credentials && !acc.needsLogin && !outStatus(acc.usage, now, data.outAt).out && !hitLimitUnchecked(acc, now);
     // Leftover the reset would throw away: the week renews soon, or more is left than you
     // could spend before then even using this account half of the time.
     const burn =
@@ -117,7 +117,7 @@ function advise(data, now = Date.now(), { burnWindowHours = 24, minBurnPct = 10 
 function soonestBack(data, now = Date.now()) {
   let first = null;
   for (const a of data.accounts) {
-    const st = outStatus(a.usage, now);
+    const st = outStatus(a.usage, now, data.outAt);
     if (st.out && st.until && (!first || st.until < first.until)) first = { account: a, until: st.until };
   }
   return first;

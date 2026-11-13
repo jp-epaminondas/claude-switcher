@@ -22,3 +22,12 @@ test('limit info from the usage API', () => {
   assert.deepEqual(st, { out: true, until: Date.parse(weekly) });
   assert.deepEqual(outStatus({ fetchedAt, fiveHour: { pct: 100, resetsAt: now - 1 }, limits: [] }, now), { out: false });
 });
+
+test('an account at the autoswitcher threshold is out too', () => {
+  const now = Date.now();
+  const usage = { fetchedAt: now, fiveHour: { pct: 30, resetsAt: now + HOUR }, sevenDay: { pct: 99, resetsAt: now + 50 * HOUR }, limits: [] };
+  assert.deepEqual(outStatus(usage, now), { out: false });
+  assert.deepEqual(outStatus(usage, now, 99), { out: true, until: now + 50 * HOUR });
+  assert.deepEqual(outStatus(usage, now, 100), { out: false });
+  assert.deepEqual(outStatus(usage, now, undefined), { out: false });
+});

@@ -326,10 +326,13 @@ class Switcher {
       const now = Date.now();
       const events = [];
       for (const acc of data.accounts) {
-        const st = outStatus(acc.usage, now);
+        const st = outStatus(acc.usage, now, data.outAt);
         if (st.out) {
-          if (!acc.out) events.push({ type: 'out', id: acc.id, until: st.until, active: acc.id === data.activeId });
-          acc.out = { until: st.until, since: (acc.out && acc.out.since) || now };
+          // `soft`: out only at the autoswitcher's threshold, not at 100% yet. Reported again
+          // once it does reach 100%.
+          const soft = !outStatus(acc.usage, now).out;
+          if (!acc.out || (acc.out.soft && !soft)) events.push({ type: 'out', id: acc.id, until: st.until, active: acc.id === data.activeId, soft });
+          acc.out = { until: st.until, since: (acc.out && acc.out.since) || now, ...(soft && { soft }) };
         } else if (acc.out) {
           delete acc.out;
           events.push({ type: 'back', id: acc.id, active: acc.id === data.activeId });

@@ -27,16 +27,18 @@ function effectivePct(w, now = Date.now()) {
   return w.pct;
 }
 
-// An account is out while any account-wide window sits at 100%; `until` is when the last of
-// them resets (null when the API didn't say).
-function outStatus(usage, now = Date.now()) {
+// An account is out while any account-wide window sits at 100%, or at `fullAt` % when the
+// autoswitcher leaves accounts there (data.outAt); `until` is when the last of them resets
+// (null when the API didn't say).
+function outStatus(usage, now = Date.now(), fullAt = 100) {
   if (!usage) return { out: false };
+  const limit = fullAt > 0 && fullAt < 100 ? fullAt : 100;
   const windows = [usage.fiveHour, usage.sevenDay, ...(usage.limits || [])].filter(Boolean);
   let out = false;
   let unknown = false;
   let until = 0;
   for (const w of windows) {
-    if (w.pct == null || w.pct < 100) continue;
+    if (w.pct == null || w.pct < limit) continue;
     if (w.resetsAt == null) {
       if (now - usage.fetchedAt < 5 * HOUR) out = unknown = true;
       continue;

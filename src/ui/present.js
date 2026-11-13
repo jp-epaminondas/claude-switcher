@@ -6,7 +6,7 @@ const { reason, soonestBack } = require('../core/advisor');
 
 function accountState(a, data, now) {
   const active = a.id === data.activeId;
-  const st = outStatus(a.usage, now);
+  const st = outStatus(a.usage, now, data.outAt);
   if (a.needsLogin) return { active, icon: 'warning', color: 'charts.yellow', situation: 'precisa de login de novo' };
   if (st.out) {
     const situation = st.until ? `esgotada · volta ${fmtClock(st.until, now)} (${fmtIn(st.until, now)})` : 'esgotada';

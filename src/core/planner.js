@@ -41,7 +41,7 @@ function stateOf(data, now) {
       weekFull,
       weekResets: u.sevenDay && u.sevenDay.resetsAt > now ? u.sevenDay.resetsAt : null,
     };
-    const st = outStatus(acc.usage, now);
+    const st = outStatus(acc.usage, now, data.outAt);
     // Out for a reason the two windows don't show (another limit, or a limit Claude Code just
     // reported): held until it says, or for a whole 5h window when unknown.
     if (hitLimitUnchecked(acc, now)) s.heldUntil = s.fiveResets || now + 5 * HOUR;

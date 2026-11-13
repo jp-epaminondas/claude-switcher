@@ -12,8 +12,9 @@ function createStatusBar(app) {
 
   function update(data, advice, now) {
     const active = data.accounts.find((a) => a.id === data.activeId);
-    const outCount = data.accounts.filter((a) => outStatus(a.usage, now).out).length;
-    const othersOut = outCount - (active && outStatus(active.usage, now).out ? 1 : 0);
+    const statusOf = (a) => outStatus(a.usage, now, data.outAt);
+    const outCount = data.accounts.filter((a) => statusOf(a).out).length;
+    const othersOut = outCount - (active && statusOf(active).out ? 1 : 0);
     let text;
     let bg;
     if (!data.accounts.length) {
@@ -21,7 +22,7 @@ function createStatusBar(app) {
     } else if (!active) {
       text = '$(account) Claude: conta atual não salva';
     } else {
-      const st = outStatus(active.usage, now);
+      const st = statusOf(active);
       if (st.out) {
         text = `$(error) ${active.label} esgotada${st.until ? ` · volta ${fmtClock(st.until, now)}` : ''}`;
         bg = 'statusBarItem.errorBackground';

@@ -94,7 +94,7 @@ function createActions(app) {
       if (choice) addAccount();
       return;
     }
-    const st = outStatus(acc.usage);
+    const st = outStatus(acc.usage, Date.now(), data.outAt);
     if (st.out) {
       const until = st.until ? ` até ${fmtClock(st.until)}` : '';
       const choice = await vscode.window.showWarningMessage(`${acc.label} está esgotada${until}. Trocar mesmo assim?`, 'Trocar');
@@ -137,7 +137,8 @@ function createActions(app) {
     const acc = data.accounts.find((a) => a.id === ev.id);
     if (!acc) return;
     if (ev.type === 'out' && ev.active) {
-      onActiveOut(data, acc, ev.until);
+      // At the threshold only: the Stop hook switches when the turn ends, not mid-answer.
+      if (!ev.soft) onActiveOut(data, acc, ev.until);
     } else if (ev.type === 'burn' && app.config().get('notifyBurn', true)) {
       const x = app.advise(data, Date.now()).byId.get(acc.id);
       if (!x || !x.burn) return;

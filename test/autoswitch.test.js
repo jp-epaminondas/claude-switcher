@@ -205,3 +205,40 @@ test('at the end of a turn, an account at 99% hands over to the next one', async
   assert.equal(r.account.id, 'uuid-B');
   assert.equal(liveAccount(t), 'B');
 });
+
+test('an account left at the threshold counts as out until its window resets', async () => {
+  const t = await threeAccounts();
+  const reset = Date.now() + 2 * 3600 * 1000;
+  const usage = (five, week) => ({
+    five_hour: { utilization: five, resets_at: new Date(reset).toISOString() },
+    seven_day: { utilization: week, resets_at: new Date(reset).toISOString() },
+  });
+  await t.store.update((d) => (d.outAt = 99)); // the autoswitcher on, at 99%
+  t.api.usage.A = usage(10, 99);
+  t.api.usage.B = usage(20, 10);
+  t.api.usage.C = usage(5, 10);
+  await t.sw.refreshUsage({ force: true });
+  await t.sw.onTurnEnd({ threshold: 99 });
+  assert.notEqual(liveAccount(t), 'A');
+
+  const data = t.store.load();
+  assert.equal(advise(data).byId.get('uuid-A').available, false, 'never picked again');
+  const events = await t.sw.collectEvents();
+  assert.deepEqual(
+    events.filter((e) => e.type === 'out').map((e) => [e.id, e.until, e.active, e.soft]),
+    [['uuid-A', reset, false, true]],
+  );
+  assert.deepEqual(await t.sw.collectEvents(), [], 'reported once');
+
+  // Reaching 100% later is reported again, as a real limit.
+  t.api.usage.A = usage(10, 100);
+  await t.sw.refreshUsage({ force: true, only: ['uuid-A'] });
+  const hard = (await t.sw.collectEvents()).filter((e) => e.type === 'out');
+  assert.deepEqual(hard.map((e) => [e.id, e.soft]), [['uuid-A', false]]);
+
+  // With the autoswitcher off, 99% is just 99%.
+  t.api.usage.A = usage(10, 99);
+  await t.sw.refreshUsage({ force: true, only: ['uuid-A'] });
+  await t.store.update((d) => delete d.outAt);
+  assert.equal(advise(t.store.load()).byId.get('uuid-A').available, true);
+});

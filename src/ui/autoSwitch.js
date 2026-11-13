@@ -36,6 +36,14 @@ function createAutoSwitch(app) {
         hookProblem = on ? e.message : null;
         log(`hook do autoswitcher: ${e.message}`);
       }
+      // An account left at the threshold counts as out, so nothing sends us back to it.
+      const outAt = on ? switchAt() : 100;
+      await store
+        .update((data) => {
+          if (outAt < 100) data.outAt = outAt;
+          else delete data.outAt;
+        })
+        .catch((e) => log(`autoswitcher: ${e.message}`));
       app.render();
     });
     return syncing;

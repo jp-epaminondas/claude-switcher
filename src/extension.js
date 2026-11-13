@@ -62,7 +62,9 @@ function activate(context) {
     vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
     vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('claudeSwitcher.autoSwitch')) autoSwitch.onConfigChanged();
+      if (e.affectsConfiguration('claudeSwitcher.autoSwitch') || e.affectsConfiguration('claudeSwitcher.switchAtPercent')) {
+        autoSwitch.onConfigChanged();
+      }
       else if (e.affectsConfiguration('claudeSwitcher')) render();
     }),
   );

@@ -42,7 +42,7 @@ function createAccountsView(app) {
       changed.fire();
       if (!data) return;
       const active = data.accounts.find((a) => a.id === data.activeId);
-      const out = data.accounts.filter((a) => outStatus(a.usage, now).out).length;
+      const out = data.accounts.filter((a) => outStatus(a.usage, now, data.outAt).out).length;
       view.description = active ? active.label : '';
       view.badge = out ? { value: out, tooltip: `${out} ${out > 1 ? 'contas esgotadas' : 'conta esgotada'}` } : undefined;
     },
