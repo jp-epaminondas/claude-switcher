@@ -51,7 +51,7 @@ No final da lista de contas aparece sempre a melhor conta para usar agora, por e
      use antes que perca
 ```
 
-Quando a recomendada não é a conta em uso, passe o mouse no item ⭐ para ver o botão → que troca para ela.
+Quando a recomendada não é a conta em uso, clique nela na lista para trocar.
 
 **Regra:** use primeiro a conta cuja semana renova antes. O que sobra nela é perdido na renovação, enquanto as outras guardam o saldo para depois. Esse é o melhor critério para não desperdiçar limite, e funciona melhor do que reagir só no último dia, quando o limite de 5h e as horas de sono já não deixam gastar tudo. Algumas regras complementam essa:
 - Contas esgotadas, quase vazias (menos de 5% da semana) ou com a semana ainda não iniciada vão para o fim da fila.
@@ -200,7 +200,7 @@ media/               ícone da barra lateral
 ```sh
 npm test          # roda os testes
 npm run package   # gera dist/claude-switcher-<versão>.vsix
-code --install-extension dist/claude-switcher-0.8.2.vsix
+code --install-extension dist/claude-switcher-0.8.3.vsix
 ```
 
 Testado no Windows com o Claude Code 2.1.281. No macOS o Claude Code guarda o login no Keychain, e esta extensão não cobre esse caso.

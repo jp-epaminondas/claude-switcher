@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -90,19 +90,14 @@
       ],
       "view/item/context": [
         {
-          "command": "claudeSwitcher.useAccount",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^(account|advice)$/",
-          "group": "inline@1"
-        },
-        {
           "command": "claudeSwitcher.renameAccount",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
-          "group": "inline@2"
+          "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.removeAccount",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && viewItem =~ /^account/",
-          "group": "inline@3"
+          "group": "inline@2"
         },
         {
           "command": "claudeSwitcher.useAccount",

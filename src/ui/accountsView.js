@@ -100,11 +100,6 @@ function adviceItem(data, advice, now) {
     ? new vscode.ThemeIcon('star-full', new vscode.ThemeColor('charts.yellow'))
     : new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.red'));
   item.tooltip = headline(data, advice, now);
-  // A switch button instead of a click action: clicking would also collapse the item.
-  if (best && !best.active) {
-    item.contextValue = 'advice';
-    item.accountId = best.id;
-  }
   item.lines = lines.map((text, i) => {
     const line = new vscode.TreeItem(text);
     line.id = `advice.${i}`;
