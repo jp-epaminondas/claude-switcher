@@ -55,6 +55,9 @@ test('vault: encrypted at rest, names readable while locked, wrong password refu
   assert.equal(other.entries()[0].ref, 'servidor-producao');
 
   await v.changeMaster('outra senha mestra');
+  // The other window, still on the old key, takes the new one before saving again.
+  assert.equal(other.adoptKey(v.exportKey()), true);
+  await other.renameEntry(e.id, 'Servidor produção');
   v.lock();
   await assert.rejects(v.unlock('senha mestra boa'), /errada/);
   await v.unlock('outra senha mestra');

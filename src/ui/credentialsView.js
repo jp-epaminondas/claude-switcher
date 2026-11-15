@@ -158,8 +158,10 @@ function createCredentialsView(app, sidebar) {
         return { ok: true, locked: !vault.unlocked, entries: vault.catalog().entries };
       case 'resolve':
         return resolveFor(msg);
+      // Also reaches the windows already unlocked: after a master password change elsewhere
+      // they would otherwise save with the old key and bring the old password back.
       case 'sync-unlock':
-        if (!vault.unlocked && msg.until > Date.now() && vault.exists() && vault.adoptKey(msg.key)) {
+        if (msg.until > Date.now() && vault.exists() && !(vault.unlocked && msg.key === vault.exportKey()) && vault.adoptKey(msg.key)) {
           arm(msg.until);
           refresh();
         }
