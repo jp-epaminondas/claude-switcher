@@ -48,7 +48,9 @@ test('tells a conversation what the other one in the project is doing, once per 
   assert.equal(say('A', 'UserPromptSubmit', { prompt: 'arruma o loop do envio de mensagens' }), null, 'alone in the project');
   edit('A', 'src/a.js');
 
-  const first = context(say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' }));
+  const firstOut = say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' });
+  assert.equal(firstOut.systemMessage, 'Claude Switcher: outra conversa está trabalhando neste projeto (pedido: "arruma o loop do envio de mensagens"). Avisei o Claude para não atrapalhar.');
+  const first = context(firstOut);
   assert.match(first, /Outra conversa do Claude Code está trabalhando neste mesmo projeto/);
   assert.match(first, /trabalhando agora, pedido: "arruma o loop do envio de mensagens"/);
   assert.match(first, /ainda não foram para commit: src\/a\.js/);
@@ -57,7 +59,9 @@ test('tells a conversation what the other one in the project is doing, once per 
   assert.equal(say('B', 'UserPromptSubmit', { prompt: 'sim' }), null, 'nothing new');
   edit('A', 'src/b.js');
   say('A', 'Stop');
-  const update = context(say('B', 'UserPromptSubmit', { prompt: 'ok' }));
+  const updateOut = say('B', 'UserPromptSubmit', { prompt: 'ok' });
+  assert.equal(updateOut.systemMessage, undefined, 'the user hears only when someone comes or goes');
+  const update = context(updateOut);
   assert.match(update, /^\[Claude Switcher\] A outra conversa/);
   assert.match(update, /parada há 1 min, esperando o usuário/);
   assert.match(update, /src\/b\.js, src\/a\.js/);
@@ -67,7 +71,9 @@ test('tells a conversation what the other one in the project is doing, once per 
   assert.match(context(say('A', 'UserPromptSubmit', { prompt: 'agora roda os testes do envio' })), /pedido: "cria a tela de login com 2fa"/);
 
   say('A', 'SessionEnd');
-  assert.match(context(say('B', 'UserPromptSubmit', { prompt: 'continua' })), /Agora só você está mexendo/);
+  const ended = say('B', 'UserPromptSubmit', { prompt: 'continua' });
+  assert.match(context(ended), /Agora só você está mexendo/);
+  assert.match(ended.systemMessage, /a outra conversa deste projeto terminou/);
   assert.equal(say('B', 'UserPromptSubmit', { prompt: 'continua' }), null);
 });
 
@@ -94,7 +100,9 @@ test('holds back once a git command that would take or throw away the other one\
   edit('A', 'src/a.js');
   edit('B', 'src/b.js');
 
-  const reason = denied(bash('B', 'git add -A && git commit -m "feat: login"'));
+  const held = bash('B', 'git add -A && git commit -m "feat: login"');
+  assert.equal(held.systemMessage, 'Claude Switcher: segurei `git add -A && git commit -m "feat: login"`, que levaria para o commit mudanças da outra conversa. Se era isso mesmo, peça de novo que passa.');
+  const reason = denied(held);
   assert.match(reason, /levaria para o commit mudanças que outra conversa fez/);
   assert.match(reason, /Arquivos dela: src\/a\.js\./);
   assert.match(reason, /pedido: "arruma o loop do envio de mensagens"/);

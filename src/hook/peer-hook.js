@@ -357,6 +357,13 @@ const WHY = {
   discard: 'ele apagaria ou esconderia mudanças que outra conversa fez e ainda não foram para commit',
   branch: 'trocar de branch muda os arquivos debaixo de outra conversa que está trabalhando agora',
 };
+// The same, in one line for the user.
+const WHY_USER = {
+  sweep: 'levaria para o commit mudanças da outra conversa',
+  commit: 'o índice do git tem arquivos da outra conversa',
+  discard: 'apagaria mudanças da outra conversa',
+  branch: 'trocaria de branch com a outra conversa trabalhando',
+};
 const INSTEAD = {
   sweep: 'Adicione só os seus arquivos, pelo nome (git add caminho/do/arquivo).',
   commit: 'Tire os arquivos dela do índice com git restore --staged <arquivo> e faça o commit só com os seus.',
@@ -364,7 +371,7 @@ const INSTEAD = {
   branch: 'Continue no branch atual, ou peça ao usuário para combinar com a outra conversa.',
 };
 
-// The reason to hold a shell command back, or null to let it run.
+// Why to hold a shell command back ({ kind, reason }), or null to let it run.
 function holdBack(command, cwd, root, peers, status, mine) {
   for (const risk of gitCommands(command, cwd).map((c) => gitRisk(c, root)).filter(Boolean)) {
     let who;
@@ -380,9 +387,19 @@ function holdBack(command, cwd, root, peers, status, mine) {
     }
     if (!who.length) continue;
     const list = files.length ? ` Arquivos dela: ${listFiles(root, files)}.` : '';
-    return `[Claude Switcher] Não rodei este comando: ${WHY[risk.kind]}. Ela trabalha neste projeto ao mesmo tempo que você: ${who.map((p) => nameOf(p) + taskNote(p)).join('; ')}.${list} ${INSTEAD[risk.kind]} Se o usuário pediu mesmo para fazer isso, rode exatamente o mesmo comando de novo, que ele passa.`;
+    const reason = `[Claude Switcher] Não rodei este comando: ${WHY[risk.kind]}. Ela trabalha neste projeto ao mesmo tempo que você: ${who.map((p) => nameOf(p) + taskNote(p)).join('; ')}.${list} ${INSTEAD[risk.kind]} Se o usuário pediu mesmo para fazer isso, rode exatamente o mesmo comando de novo, que ele passa.`;
+    return { kind: risk.kind, reason };
   }
   return null;
+}
+
+const short = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+// The line the user sees when the conversation first hears about the others.
+function heads(peers) {
+  const one = peers.length === 1;
+  const task = one && peers[0].meta.task ? ` (pedido: "${short(peers[0].meta.task, 80)}")` : '';
+  return `Claude Switcher: ${one ? 'outra conversa está' : `outras ${peers.length} conversas estão`} trabalhando neste projeto${task}. Avisei o Claude para não atrapalhar.`;
 }
 
 // --- the hook ---
@@ -421,6 +438,7 @@ function run(hook, sessions, now = Date.now()) {
     const peers = sessions.peers(id, rootKey, now);
     const told = meta.told || {};
     let text = null;
+    let shown = null;
     if (peers.length) {
       const status = gitStatus(root);
       const mine = sessions.edits(id);
@@ -428,13 +446,15 @@ function run(hook, sessions, now = Date.now()) {
       const full = told.ids !== ids || now - (told.fullAt || 0) > BRIEF_AGAIN_MS;
       const sig = peers.map((p) => [p.id, p.working, p.meta.task, pendingFiles(p, status, mine).join('|')].join(':')).join(',');
       if (full || sig !== told.sig) text = briefing(root, peers, status, mine, now, full);
+      if (told.ids !== ids) shown = heads(peers);
       meta.told = { ids, sig, fullAt: full ? now : told.fullAt };
     } else if (told.ids) {
       text = '[Claude Switcher] A outra conversa que trabalhava neste projeto terminou ou parou faz tempo. Agora só você está mexendo nele.';
+      shown = 'Claude Switcher: a outra conversa deste projeto terminou. Agora só esta está mexendo nele.';
       meta.told = null;
     }
     sessions.write(id, 'json', JSON.stringify(meta));
-    return text && { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } };
+    return text && { ...(shown && { systemMessage: shown }), hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } };
   }
 
   if (!sessions.meta(id)) sessions.write(id, 'json', JSON.stringify(meta));
@@ -472,12 +492,15 @@ function run(hook, sessions, now = Date.now()) {
     const command = hook.tool_input && hook.tool_input.command;
     if (typeof command !== 'string' || !/\bgit\b/.test(command)) return null;
     const status = gitStatus(root);
-    const reason = holdBack(command, hook.cwd || root, root, peers, status, mine);
-    if (!reason) return null;
+    const held = holdBack(command, hook.cwd || root, root, peers, status, mine);
+    if (!held) return null;
     const key = command.trim().replace(/\s+/g, ' ');
     if (sessions.noted(id, 'cmd', key, RETRY_MS, now)) return null; // sent again: the user wants it
     sessions.append(id, 'notes', ['cmd', key.replace(/\t/g, ' '), now]);
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } };
+    return {
+      systemMessage: `Claude Switcher: segurei \`${short(key, 60)}\`, que ${WHY_USER[held.kind]}. Se era isso mesmo, peça de novo que passa.`,
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: held.reason },
+    };
   }
   return null;
 }
