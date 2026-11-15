@@ -73,9 +73,10 @@ function createSidebar() {
       description: '',
       badge: undefined,
       refresh: () => p === current && changed.fire(),
-      decorate({ description = p.description, badge = p.badge } = {}) {
-        p.description = description;
-        p.badge = badge;
+      // A field left out stays; one given as undefined is cleared (no badge any more).
+      decorate(fields = {}) {
+        if ('description' in fields) p.description = fields.description;
+        if ('badge' in fields) p.badge = fields.badge;
         if (p === current) apply();
       },
       shown: () => p === current && view.visible,
