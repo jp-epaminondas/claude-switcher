@@ -35,7 +35,15 @@
         {
           "id": "claudeSwitcher.accounts",
           "name": "Contas",
-          "icon": "media/switcher.svg"
+          "icon": "media/switcher.svg",
+          "when": "claudeSwitcher.page != approvals"
+        },
+        {
+          "type": "webview",
+          "id": "claudeSwitcher.approvals",
+          "name": "Aprovações",
+          "icon": "media/switcher.svg",
+          "when": "claudeSwitcher.page == approvals"
         }
       ]
     },
@@ -85,6 +93,26 @@
         {
           "command": "claudeSwitcher.showApprovalsCurrent",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals",
+          "group": "0_pages@4"
+        },
+        {
+          "command": "claudeSwitcher.showAccounts",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@1"
+        },
+        {
+          "command": "claudeSwitcher.showMemories",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@2"
+        },
+        {
+          "command": "claudeSwitcher.showCredentials",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@3"
+        },
+        {
+          "command": "claudeSwitcher.showApprovalsCurrent",
+          "when": "view == claudeSwitcher.approvals",
           "group": "0_pages@4"
         },
         {
@@ -338,51 +366,6 @@
           "command": "claudeSwitcher.memories.openProjectFile",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMdFile",
           "group": "inline@1"
-        },
-        {
-          "command": "claudeSwitcher.approvals.allow",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "inline@1"
-        },
-        {
-          "command": "claudeSwitcher.approvals.deny",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "inline@2"
-        },
-        {
-          "command": "claudeSwitcher.approvals.stop",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "inline@3"
-        },
-        {
-          "command": "claudeSwitcher.approvals.go",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*go/",
-          "group": "inline@4"
-        },
-        {
-          "command": "claudeSwitcher.approvals.allow",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "1_approval@1"
-        },
-        {
-          "command": "claudeSwitcher.approvals.always",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*always/",
-          "group": "1_approval@2"
-        },
-        {
-          "command": "claudeSwitcher.approvals.deny",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "1_approval@3"
-        },
-        {
-          "command": "claudeSwitcher.approvals.stop",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*allow/",
-          "group": "1_approval@4"
-        },
-        {
-          "command": "claudeSwitcher.approvals.go",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && viewItem =~ /^approval;.*go/",
-          "group": "2_go@1"
         }
       ],
       "commandPalette": [
@@ -428,26 +411,6 @@
         },
         {
           "command": "claudeSwitcher.showApprovalsCurrent",
-          "when": "false"
-        },
-        {
-          "command": "claudeSwitcher.approvals.allow",
-          "when": "false"
-        },
-        {
-          "command": "claudeSwitcher.approvals.always",
-          "when": "false"
-        },
-        {
-          "command": "claudeSwitcher.approvals.deny",
-          "when": "false"
-        },
-        {
-          "command": "claudeSwitcher.approvals.stop",
-          "when": "false"
-        },
-        {
-          "command": "claudeSwitcher.approvals.go",
           "when": "false"
         },
         {
@@ -665,36 +628,6 @@
         "command": "claudeSwitcher.showApprovalsCurrent",
         "title": "✓ Aprovações",
         "category": "Claude Switcher"
-      },
-      {
-        "command": "claudeSwitcher.approvals.allow",
-        "title": "Aprovar",
-        "category": "Claude Switcher",
-        "icon": "$(check)"
-      },
-      {
-        "command": "claudeSwitcher.approvals.always",
-        "title": "Sempre permitir…",
-        "category": "Claude Switcher",
-        "icon": "$(pass)"
-      },
-      {
-        "command": "claudeSwitcher.approvals.deny",
-        "title": "Negar…",
-        "category": "Claude Switcher",
-        "icon": "$(close)"
-      },
-      {
-        "command": "claudeSwitcher.approvals.stop",
-        "title": "Negar e parar o Claude",
-        "category": "Claude Switcher",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "claudeSwitcher.approvals.go",
-        "title": "Ir para a conversa",
-        "category": "Claude Switcher",
-        "icon": "$(link-external)"
       },
       {
         "command": "claudeSwitcher.cred.create",

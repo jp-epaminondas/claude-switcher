@@ -73,17 +73,17 @@ Ao ligar, a extensão instala hooks `UserPromptSubmit`, `PreToolUse` (Edit, Writ
 
 Com várias conversas do Claude Code abertas, em várias abas e janelas, cada pedido de permissão fica esperando na aba dele, e é preciso passar por todas para ver qual está parada. Com esta opção ligada (padrão), os pedidos de todas as conversas, de todas as janelas, vão também para a página **Aprovações** do painel do switcher (menu **…** no título do painel).
 
-- **Cada pedido é uma linha**, como *Rodar comando: Roda os testes · janela Rota7 · 14:32*, com o ícone azul quando vem desta janela e laranja quando vem de outra. Abaixo dela:
+- **Cada pedido é um cartão** que mostra:
+  - de onde ele veio: **Esta janela** ou **Outra janela: Rota7**, em laranja;
   - o título da conversa (o mesmo da aba), o projeto e o último pedido que você fez a ela;
-  - o que o Claude quer fazer: as primeiras linhas do comando, ou as linhas que saem e as que entram no arquivo;
-  - o que o Claude disse logo antes.
-  Passando o mouse aparece tudo, com o comando ou a mudança inteira.
-- **Botões**, ao passar o mouse na linha: ✓ **Aprovar**, ✕ **Negar** (pergunta o que o Claude deve fazer no lugar; Enter vazio só nega, Esc desiste), ■ **Parar** (nega e para o Claude naquela conversa) e ↗ **Ir para a conversa** (traz para a frente a janela e a aba dela). Quando o Claude Code sugere uma regra, como `Sempre permitir Bash(npm test) neste projeto, só para você`, ela aparece numa linha embaixo do pedido: um clique aprova e guarda a regra. O botão direito tem as mesmas opções.
+  - o que o Claude quer fazer: o comando com a descrição, o arquivo com as linhas que saem e as que entram, a página, a ferramenta do MCP com os parâmetros;
+  - o que o Claude disse logo antes, recolhido.
+- **Botões:** **Aprovar**; **Sempre permitir…**, com a regra que o próprio Claude Code sugere, como `Sempre permitir Bash(npm test) neste projeto, só para você`; **Negar**, com um campo opcional para dizer ao Claude o que fazer no lugar; **Parar**, que nega e para o Claude naquela conversa; e **Ir para a conversa**, que traz para a frente a janela e a aba da conversa.
 - **A janela em que você está:** todas as janelas mostram os mesmos pedidos, mas só a que está com o foco (ou a última que esteve, se você estiver em outro programa) abre a página sozinha quando chega um pedido. O cursor fica onde estava. Para não abrir sozinho, desligue `claudeSwitcher.approvalsReveal`.
 - A barra de status mostra `🔔 2 aprovações` enquanto houver pedidos esperando, e o ícone do painel ganha o número mesmo com outra página aberta.
-- **O pedido continua na aba também.** Vale a primeira resposta: respondido na página, o diálogo da aba some; respondido na aba, a linha some em 1 ou 2 s.
+- **O pedido continua na aba também.** Vale a primeira resposta: respondido na página, o diálogo da aba some; respondido na aba, o cartão some em 1 ou 2 s.
 - Uma pergunta do Claude com opções (`AskUserQuestion`) aparece na página só para avisar, com o botão para ir até a conversa: a resposta precisa ser dada na aba. A aprovação de um plano (`ExitPlanMode`) dá para dar pela página.
-- **De qual janela veio:** cada janela se marca no ambiente do VS Code, e as conversas que ela abre levam essa marca. Uma conversa aberta antes da extensão carregar é ligada à janela pela pasta. Se nenhuma janela aberta tiver a pasta dela, a linha diz *janela não identificada*.
+- **De qual janela veio:** cada janela se marca no ambiente do VS Code, e as conversas que ela abre levam essa marca. Uma conversa aberta antes da extensão carregar é ligada à janela pela pasta. Se nenhuma janela aberta tiver a pasta dela, o cartão diz *Janela não identificada*.
 - Só vale para as conversas da extensão do Claude Code no VS Code, onde o diálogo aparece junto. No `claude` do terminal o diálogo só aparece depois do hook, então lá ele não faz nada.
 
 Ao ligar, a extensão instala um hook `PermissionRequest` em `~/.claude/settings.json` e o remove ao desligar. O hook deixa o pedido em `~/.claude-switcher/approvals/` e espera a resposta por até 1 h, só enquanto alguma janela do VS Code com o switcher estiver aberta. Liga e desliga pelo menu da barra de status ou pelo comando "Ligar/desligar as aprovações".
@@ -286,10 +286,10 @@ src/
     autoSwitch.js    liga/desliga o autoswitcher e atende os pedidos do hook
     topicGuard.js    liga/desliga o aviso de assunto novo, atende o hook e manda o pedido para uma conversa nova
     sameProject.js   liga/desliga as conversas no mesmo projeto e conta quantas há no projeto aberto
-    approvalsView.js página Aprovações: marca a janela, mostra os pedidos e manda as respostas
+    approvalsView.js página Aprovações (uma webview que entra no lugar da lista): marca a janela, mostra os pedidos e manda as respostas
     present.js       textos de cada conta, compartilhados pelas telas
 test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
-media/               ícone da barra lateral
+media/               ícone da barra lateral e os cartões da página Aprovações
 ```
 
 ```sh

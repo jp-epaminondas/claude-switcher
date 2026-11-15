@@ -3,7 +3,8 @@
 // The side bar panel, one page at a time: Contas, Memórias, Credenciais or Aprovações, picked
 // from the panel's "…" menu. Each page brings its rows, its description and its badge; only the
 // page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
-// has none.
+// has none. A page can bring its own view instead of rows (Aprovações is a webview): the
+// "when" of each view in package.json shows the tree or that view, by the page on screen.
 const vscode = require('vscode');
 
 const VIEW = 'claudeSwitcher.accounts';
@@ -52,19 +53,20 @@ function createSidebar() {
 
   function show(name) {
     const page = pages.get(name);
-    if (!page) return;
+    if (!page) return Promise.resolve();
     const switched = page !== current;
     current = page;
-    vscode.commands.executeCommand('setContext', CONTEXT, name);
+    const set = vscode.commands.executeCommand('setContext', CONTEXT, name);
     apply();
     if (switched) changed.fire();
     if (view.visible) shown(page);
+    return set;
   }
 
   // Registers a page. `getChildren` builds its rows; `onShow` runs whenever it comes on screen;
   // `collapseOnShow` makes every row start collapsed each time; `badgeAlways` shows its badge
-  // on other pages too.
-  function page(name, title, { getChildren, onShow = () => {}, collapseOnShow = false, badgeAlways = false }) {
+  // on other pages too; `viewId` is the page's own view, shown in place of the tree.
+  function page(name, title, { getChildren = () => [], onShow = () => {}, collapseOnShow = false, badgeAlways = false, viewId = VIEW }) {
     const p = {
       name,
       title,
@@ -72,6 +74,7 @@ function createSidebar() {
       onShow,
       collapseOnShow,
       badgeAlways,
+      viewId,
       shownCount: 0,
       description: '',
       badge: undefined,
@@ -91,8 +94,8 @@ function createSidebar() {
 
   // Opens the side bar on a page.
   async function focus(name) {
-    show(name);
-    await vscode.commands.executeCommand(`${VIEW}.focus`);
+    await show(name); // the page's view only exists once the context says so
+    await vscode.commands.executeCommand(`${pages.get(name)?.viewId || VIEW}.focus`);
   }
 
   const disposables = [
