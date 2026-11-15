@@ -22,9 +22,13 @@ const REVEAL_MS = 30 * 1000;
 const KEEP_USES = 20;
 const DEFAULT_IMPORT = 'C:\\wamp64\\www\\Rota7\\.specs\\server.md';
 
+const LOCK_CHOICES = [5, 15, 30, 60, 120, 240, 480, 720];
+
 const icon = (id, color) => new vscode.ThemeIcon(id, color ? new vscode.ThemeColor(color) : undefined);
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// 90 -> "1 h 30 min"
+const fmtMinutes = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
 
 // What a non-secret field holds, by its name.
 const FIELD_ICONS = [
@@ -606,6 +610,43 @@ function createCredentialsView(app, sidebar) {
     vscode.window.showInformationMessage('Senha mestra trocada.');
   }
 
+  // Every window hears the setting change and re-arms itself (onLockMinutesChanged).
+  async function lockTime() {
+    const current = lockMinutes();
+    const items = LOCK_CHOICES.map((m) => ({ label: `${m === current ? '$(check) ' : ''}${fmtMinutes(m)}`, minutes: m }));
+    if (!LOCK_CHOICES.includes(current)) items.unshift({ label: `$(check) ${fmtMinutes(current)}`, minutes: current });
+    items.push({ label: 'Outro tempo…', minutes: null });
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Tempo até o cofre trancar sozinho',
+      placeHolder: `Hoje: ${fmtMinutes(current)} depois de destrancar`,
+    });
+    if (!picked) return;
+    let minutes = picked.minutes;
+    if (minutes == null) {
+      const typed = await vscode.window.showInputBox({
+        title: 'Tempo até o cofre trancar sozinho',
+        prompt: 'Em minutos, de 1 a 720 (12 h).',
+        value: String(current),
+        validateInput: (v) => (/^\d+$/.test(v.trim()) && +v >= 1 && +v <= 720 ? null : 'Um número de 1 a 720'),
+      });
+      if (!typed) return;
+      minutes = Number(typed.trim());
+    }
+    if (minutes === current) return;
+    await app.config().update('credentials.lockMinutes', minutes, vscode.ConfigurationTarget.Global);
+    onLockMinutesChanged();
+    vscode.window.showInformationMessage(
+      `O cofre agora tranca ${fmtMinutes(minutes)} depois de destrancar.${vault.unlocked ? ` Aberto agora, ele tranca às ${fmtClock(lockAt)}.` : ''}`,
+    );
+  }
+
+  // An open vault starts counting the new time from now.
+  function onLockMinutesChanged() {
+    if (!vault.unlocked) return;
+    arm(Date.now() + lockMinutes() * 60 * 1000);
+    refresh();
+  }
+
   // A failing command shows its error instead of disappearing silently.
   const guarded = (fn) => async (...args) => {
     try {
@@ -647,9 +688,11 @@ function createCredentialsView(app, sidebar) {
     reveal,
     hide,
     changeMaster,
+    lockTime,
   };
   const disposables = [
     vscode.window.onDidChangeWindowState((s) => s.focused && host.touch(true)),
+    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('claudeSwitcher.credentials.lockMinutes') && onLockMinutesChanged()),
     ...Object.entries(commands).map(([name, fn]) => vscode.commands.registerCommand(`claudeSwitcher.cred.${name}`, guarded(fn))),
   ];
 

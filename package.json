@@ -123,6 +123,11 @@
           "group": "1_vault@1"
         },
         {
+          "command": "claudeSwitcher.cred.lockTime",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
+          "group": "1_vault@2"
+        },
+        {
           "command": "claudeSwitcher.memories.addInstruction",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
           "group": "navigation@0"
@@ -667,6 +672,11 @@
       {
         "command": "claudeSwitcher.cred.changeMaster",
         "title": "Trocar a senha mestra",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.lockTime",
+        "title": "Tempo até o cofre trancar sozinho",
         "category": "Claude Switcher"
       },
       {
