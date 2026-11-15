@@ -64,7 +64,7 @@ function activate(context) {
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
   const topicGuard = (app.topicGuard = createTopicGuard(app));
   const sameProject = (app.sameProject = createSameProject(app));
-  const approvals = (app.approvals = createApprovals(app));
+  const approvals = (app.approvals = createApprovals(app, sidebar));
   const memoriesView = createMemoriesView(app, sidebar);
   const credentialsView = createCredentialsView(app, sidebar);
 

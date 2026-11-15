@@ -1,8 +1,9 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas or Memórias, picked from the panel's "…"
-// menu. Each page brings its rows, its description and its badge; only the page on screen
-// shows them.
+// The side bar panel, one page at a time: Contas, Memórias, Credenciais or Aprovações, picked
+// from the panel's "…" menu. Each page brings its rows, its description and its badge; only the
+// page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
+// has none.
 const vscode = require('vscode');
 
 const VIEW = 'claudeSwitcher.accounts';
@@ -37,7 +38,7 @@ function createSidebar() {
   function apply() {
     view.title = current.title;
     view.description = current.description;
-    view.badge = current.badge;
+    view.badge = current.badge || [...pages.values()].find((p) => p.badgeAlways && p.badge)?.badge;
   }
 
   // The page comes on screen: collapsed again if it asks for it, then its onShow.
@@ -61,14 +62,16 @@ function createSidebar() {
   }
 
   // Registers a page. `getChildren` builds its rows; `onShow` runs whenever it comes on screen;
-  // `collapseOnShow` makes every row start collapsed each time.
-  function page(name, title, { getChildren, onShow = () => {}, collapseOnShow = false }) {
+  // `collapseOnShow` makes every row start collapsed each time; `badgeAlways` shows its badge
+  // on other pages too.
+  function page(name, title, { getChildren, onShow = () => {}, collapseOnShow = false, badgeAlways = false }) {
     const p = {
       name,
       title,
       getChildren,
       onShow,
       collapseOnShow,
+      badgeAlways,
       shownCount: 0,
       description: '',
       badge: undefined,
@@ -77,7 +80,7 @@ function createSidebar() {
       decorate(fields = {}) {
         if ('description' in fields) p.description = fields.description;
         if ('badge' in fields) p.badge = fields.badge;
-        if (p === current) apply();
+        if (p === current || (current && p.badgeAlways)) apply();
       },
       shown: () => p === current && view.visible,
     };
@@ -101,6 +104,7 @@ function createSidebar() {
       ['Accounts', 'accounts'],
       ['Memories', 'memories'],
       ['Credentials', 'credentials'],
+      ['Approvals', 'approvals'],
     ].flatMap(([cmd, name]) => [
       vscode.commands.registerCommand(`claudeSwitcher.show${cmd}`, () => focus(name)),
       vscode.commands.registerCommand(`claudeSwitcher.show${cmd}Current`, () => focus(name)),
@@ -112,6 +116,7 @@ function createSidebar() {
     page,
     show,
     focus,
+    visible: () => view.visible,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
 }

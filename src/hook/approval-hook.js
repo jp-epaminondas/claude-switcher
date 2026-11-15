@@ -2,7 +2,7 @@
 
 // Claude Code runs this when a tool call needs the user's permission. In the VS Code extension
 // the permission dialog shows in the conversation's tab at the same time, and whichever answers
-// first wins: that dialog, or the Aprovações panel of the Claude Switcher in any VS Code window.
+// first wins: that dialog, or the Aprovações page of the Claude Switcher in any VS Code window.
 // The hook drops "<id>.req" in approvals/ and waits for "<id>.res". It stops waiting, with no
 // decision, when the tool's result shows up in the transcript (answered in the tab), when the
 // conversation moves on, when the extension takes the request away, or after WAIT_MS.
@@ -187,7 +187,7 @@ function trim(v, depth = 0) {
 
 function request(hook, transcript, env = process.env, now = Date.now()) {
   return {
-    id: `${now}-${process.pid}`,
+    id: `${now}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`,
     at: now,
     pid: process.pid,
     window: typeof env.CLAUDE_SWITCHER_WINDOW === 'string' ? env.CLAUDE_SWITCHER_WINDOW : null,
@@ -223,10 +223,10 @@ function decisionOf(answer, hook) {
     const said = typeof answer.message === 'string' ? answer.message.trim().slice(0, 2000) : '';
     const decision = {
       behavior: 'deny',
-      message: said ? `O usuário negou pelo painel Aprovações do Claude Switcher e disse: ${said}` : 'O usuário negou pelo painel Aprovações do Claude Switcher.',
+      message: said ? `O usuário negou pela página Aprovações do Claude Switcher e disse: ${said}` : 'O usuário negou pela página Aprovações do Claude Switcher.',
     };
     if (answer.interrupt === true) decision.interrupt = true;
-    return out(decision, { systemMessage: `Claude Switcher: ${answer.interrupt === true ? 'negado e parado' : 'negado'} no painel Aprovações.` });
+    return out(decision, { systemMessage: `Claude Switcher: ${answer.interrupt === true ? 'negado e parado' : 'negado'} na página Aprovações.` });
   }
   return null;
 }
