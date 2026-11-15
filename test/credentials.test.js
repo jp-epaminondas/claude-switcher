@@ -61,6 +61,45 @@ test('vault: encrypted at rest, names readable while locked, wrong password refu
   assert.equal(v.resolve('servidor-producao.senha').field.value, SECRET);
 });
 
+test('vault: accounts inside an entry, with their own refs and the shared fields left behind', async () => {
+  const v = new Vault(tmpDir());
+  await v.create('senha mestra boa');
+  const pma = await v.addEntry('PHPMYADMIN', [
+    { name: 'Host', value: '10.0.0.2', secret: false },
+    { name: 'Usuário', value: 'master', secret: false },
+    { name: 'Senha', value: SECRET, secret: true },
+  ]);
+  const solo = await v.addEntry('Cloudflare', [{ name: 'Chave', value: 'k', secret: true }]);
+
+  // The values already there become the first account; Host stays shared.
+  const master = await v.addEntry('master', [], pma.id);
+  await v.moveFields(pma.id, master.id, pma.fields.slice(1).map((f) => f.id));
+  await v.addEntry('Cliente X', [{ name: 'Senha', value: 'cliente-pw-1', secret: true }], pma.id);
+  assert.equal(v.resolve('phpmyadmin.host').field.value, '10.0.0.2');
+  assert.equal(v.resolve('phpmyadmin-master.senha').field.value, SECRET);
+  assert.equal(v.resolve('phpmyadmin-cliente-x.senha').field.value, 'cliente-pw-1');
+  assert.throws(() => v.resolve('phpmyadmin.senha'), /tem: host\. Está nas contas: phpmyadmin-master\.senha, phpmyadmin-cliente-x\.senha/);
+
+  // Locked, the catalog still says which entry each account belongs to.
+  v.lock();
+  const cat = v.catalog().entries;
+  assert.deepEqual(
+    cat.map((e) => [e.ref, e.parentId ? cat.find((p) => p.id === e.parentId).ref : null]),
+    [['phpmyadmin', null], ['cloudflare', null], ['phpmyadmin-master', 'phpmyadmin'], ['phpmyadmin-cliente-x', 'phpmyadmin']],
+  );
+  await v.unlock('senha mestra boa');
+
+  await assert.rejects(v.addEntry('x', [], master.id), /não pode ter contas/);
+  await assert.rejects(v.setParent(pma.id, solo.id), /tem contas dentro/);
+  await v.setParent(solo.id, pma.id);
+  assert.equal(v.resolve('phpmyadmin-cloudflare.chave').field.value, 'k');
+  await v.setParent(solo.id, null);
+  assert.equal(v.resolve('cloudflare.chave').field.value, 'k');
+
+  await v.removeEntry(pma.id);
+  assert.deepEqual(v.entries().map((e) => e.title), ['Cloudflare'], 'the accounts go with it');
+});
+
 test('server.md: titles, then one value per line, named by what it looks like', () => {
   const text = [
     'Os projetos ficam nas pastas sandbox e production do servidor deste exemplo',
@@ -114,7 +153,8 @@ test('segredo: lista shows names, exec injects values that never show up', async
   const dir = tmpDir();
   const vault = new Vault(dir);
   await vault.create('senha mestra boa');
-  await vault.addEntry('SERVER SSH', [{ name: 'Senha', value: SECRET, secret: true }]);
+  const ssh = await vault.addEntry('SERVER SSH', [{ name: 'Senha', value: SECRET, secret: true }]);
+  await vault.addEntry('deploy', [{ name: 'Senha', value: 'deploy-pw-1', secret: true }], ssh.id);
   let allow = true;
   const asked = [];
   const host = new SecretHost({
@@ -131,6 +171,7 @@ test('segredo: lista shows names, exec injects values that never show up', async
     const list = await segredo(dir, ['lista']);
     assert.equal(list.code, 0, list.stderr);
     assert.match(list.stdout, /\{\{server-ssh\.senha\}\}/);
+    assert.match(list.stdout, /\n {2}conta deploy\r?\n {4}\{\{server-ssh-deploy\.senha\}\}/);
     assert.ok(!list.stdout.includes(SECRET));
 
     // As a file: the command reads it, prints it, and the output is masked.

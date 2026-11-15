@@ -185,8 +185,11 @@ function createCredentialsView(app, sidebar) {
     }
     const items = [statusItem()];
     const values = vault.unlocked ? new Map(vault.entries().map((e) => [e.id, e])) : null;
-    for (const e of vault.catalog().entries) items.push(entryItem(e, values && values.get(e.id)));
-    if (!vault.catalog().entries.length) {
+    const entries = vault.catalog().entries;
+    for (const e of entries.filter((x) => !x.parentId)) {
+      items.push(entryItem(e, values, entries.filter((x) => x.parentId === e.id)));
+    }
+    if (!entries.length) {
       items.push(
         Object.assign(new vscode.TreeItem('Importar um arquivo (como o server.md)', None), {
           id: 'cred.importHint',
@@ -215,30 +218,37 @@ function createCredentialsView(app, sidebar) {
     return t;
   }
 
-  function entryItem(e, full) {
+  // An entry: its own fields (shared by all its accounts), then its accounts.
+  function entryItem(e, values, accounts = null) {
     const t = new vscode.TreeItem(e.title, Collapsed);
     t.id = `cred.e.${e.id}`;
     t.entryId = e.id;
-    t.contextValue = 'credEntry';
-    t.iconPath = icon('key');
-    t.description = plural(e.fields.length, 'campo', 'campos');
-    t.tooltip = `${e.title}\n{{${e.ref}.…}}`;
-    t.children = e.fields.map((f) => {
-      const value = full && (full.fields.find((x) => x.id === f.id) || {}).value;
-      const c = new vscode.TreeItem(f.name, None);
-      c.id = `cred.f.${e.id}.${f.id}`;
-      c.entryId = e.id;
-      c.fieldId = f.id;
-      const shown = value != null && (!f.secret || revealed.has(f.id));
-      // credField, credFieldSecret or credFieldSecret.revealed: the eye shows on secret ones.
-      c.contextValue = f.secret ? (revealed.has(f.id) ? 'credFieldSecret.revealed' : 'credFieldSecret') : 'credField';
-      c.iconPath = icon(f.secret ? (revealed.has(f.id) ? 'eye' : 'lock-small') : 'symbol-field');
-      c.description = shown ? clip(value, 60) : '••••••••';
-      c.tooltip = `${f.name}${f.secret ? ' (secreto)' : ''}\nNo segredo: {{${e.ref}.${f.ref}}}\n\nClique para copiar o valor (some da área de transferência em 30 s).`;
-      c.command = { command: 'claudeSwitcher.cred.copy', title: 'Copiar', arguments: [c] };
-      return c;
-    });
+    t.contextValue = accounts ? 'credEntry' : 'credAccount';
+    t.iconPath = icon(accounts ? 'key' : 'account');
+    const counts = [];
+    if (e.fields.length || !accounts || !accounts.length) counts.push(plural(e.fields.length, 'campo', 'campos'));
+    if (accounts && accounts.length) counts.push(plural(accounts.length, 'conta', 'contas'));
+    t.description = counts.join(' · ');
+    t.tooltip = `${e.title}\n{{${e.ref}.…}}${accounts && accounts.length ? '\n\nOs campos daqui valem para todas as contas.' : ''}`;
+    const full = values && values.get(e.id);
+    t.children = [...e.fields.map((f) => fieldItem(e, f, full)), ...(accounts || []).map((a) => entryItem(a, values))];
     return t;
+  }
+
+  function fieldItem(e, f, full) {
+    const value = full && (full.fields.find((x) => x.id === f.id) || {}).value;
+    const c = new vscode.TreeItem(f.name, None);
+    c.id = `cred.f.${e.id}.${f.id}`;
+    c.entryId = e.id;
+    c.fieldId = f.id;
+    const shown = value != null && (!f.secret || revealed.has(f.id));
+    // credField, credFieldSecret or credFieldSecret.revealed: the eye shows on secret ones.
+    c.contextValue = f.secret ? (revealed.has(f.id) ? 'credFieldSecret.revealed' : 'credFieldSecret') : 'credField';
+    c.iconPath = icon(f.secret ? (revealed.has(f.id) ? 'eye' : 'lock-small') : 'symbol-field');
+    c.description = shown ? clip(value, 60) : '••••••••';
+    c.tooltip = `${f.name}${f.secret ? ' (secreto)' : ''}\nNo segredo: {{${e.ref}.${f.ref}}}\n\nClique para copiar o valor (some da área de transferência em 30 s).`;
+    c.command = { command: 'claudeSwitcher.cred.copy', title: 'Copiar', arguments: [c] };
+    return c;
   }
 
   function usesItem() {
@@ -371,10 +381,113 @@ function createCredentialsView(app, sidebar) {
   async function renameEntry(item) {
     if (!item || !(await ensureUnlocked())) return;
     const e = vault.entry(item.entryId);
-    const title = await vscode.window.showInputBox({ title: 'Renomear credencial', value: e.title, ignoreFocusOut: true });
+    const title = await vscode.window.showInputBox({ title: e.parentId ? 'Renomear conta' : 'Renomear credencial', value: e.title, ignoreFocusOut: true });
     if (!title) return;
+    const before = refs();
     await vault.renameEntry(e.id, title);
     await edited();
+    refsChanged(before);
+  }
+
+  // fieldId -> "credencial.campo", to tell the user when an edit changes what Claude has to use.
+  const refs = () => new Map(vault.catalog().entries.flatMap((e) => e.fields.map((f) => [f.id, `${e.ref}.${f.ref}`])));
+
+  function refsChanged(before) {
+    const changed = [...refs()].filter(([id, ref]) => before.has(id) && before.get(id) !== ref).map(([id, ref]) => `{{${before.get(id)}}} → {{${ref}}}`);
+    if (!changed.length) return;
+    const shown = changed.slice(0, 4).join(', ') + (changed.length > 4 ? ` e mais ${changed.length - 4}` : '');
+    vscode.window.showInformationMessage(`As referências mudaram: ${shown}. Atualize onde elas estiverem escritas (CLAUDE.md, memórias, scripts).`);
+  }
+
+  // A new account inside an entry (PHPMYADMIN -> master, cliente X). The first time, the
+  // values already in the entry become its first account; the fields left out stay in the
+  // entry, shared by every account (a Host, say).
+  async function addAccount(item) {
+    if (!item || !(await ensureUnlocked())) return;
+    const group = vault.entry(item.entryId);
+    if (group.parentId) return addAccount({ entryId: group.parentId });
+    const before = refs();
+    let template = vault.accountsOf(group.id).map((a) => a.fields)[0] || [];
+    let changed = false;
+    try {
+      if (!vault.accountsOf(group.id).length && group.fields.length) {
+        const perAccount = await vscode.window.showQuickPick(
+          group.fields.map((f) => ({ label: f.name, description: f.secret ? '🔒' : clip(f.value, 40), picked: !/^(host|servidor|url|porta|endere)/i.test(f.name), field: f })),
+          {
+            title: `${group.title}: o que cada conta tem o seu?`,
+            placeHolder: 'Marcados: cada conta tem o seu (Usuário, Senha). Desmarcados: valem para todas (Host).',
+            canPickMany: true,
+            ignoreFocusOut: true,
+          },
+        );
+        if (!perAccount) return;
+        if (perAccount.length) {
+          const user = group.fields.find((f) => !f.secret && /^(usu[aá]rio|user|login)/i.test(f.name));
+          const name = await vscode.window.showInputBox({
+            title: `${group.title}: nome da conta que já está aí`,
+            prompt: `Os valores atuais de ${perAccount.map((p) => p.label).join(', ')} viram esta conta.`,
+            value: user ? user.value : 'principal',
+            ignoreFocusOut: true,
+          });
+          if (!name) return;
+          const first = await vault.addEntry(name, [], group.id);
+          await vault.moveFields(group.id, first.id, perAccount.map((p) => p.field.id));
+          changed = true;
+          template = perAccount.map((p) => p.field);
+        }
+      }
+
+      const title = await vscode.window.showInputBox({ title: `${group.title}: nova conta`, prompt: 'Nome da conta (ex.: cliente X, só leitura)', ignoreFocusOut: true });
+      if (!title) return;
+      let fields = template;
+      if (template.length) {
+        const chosen = await vscode.window.showQuickPick(
+          template.map((f) => ({ label: f.name, description: f.secret ? '🔒' : '', picked: true, field: f })),
+          { title: `${title}: quais campos esta conta tem?`, placeHolder: 'Dá para adicionar outros depois, pelo + da conta', canPickMany: true, ignoreFocusOut: true },
+        );
+        if (!chosen) return;
+        fields = chosen.map((c) => c.field);
+      }
+      const values = [];
+      for (const f of fields) {
+        const value = await vscode.window.showInputBox({ title: `${title}: ${f.name}`, password: f.secret, ignoreFocusOut: true });
+        if (value == null) return;
+        values.push({ name: f.name, value, secret: f.secret });
+      }
+      const account = await vault.addEntry(title, values, group.id);
+      changed = true;
+      if (!values.length) {
+        await edited();
+        await addField({ entryId: account.id });
+      }
+    } finally {
+      if (changed) {
+        await edited();
+        refsChanged(before);
+      }
+    }
+  }
+
+  // Puts an entry inside another one as an account, or takes an account out on its own.
+  async function moveEntry(item) {
+    if (!item || !(await ensureUnlocked())) return;
+    const e = vault.entry(item.entryId);
+    if (vault.accountsOf(e.id).length) {
+      vscode.window.showWarningMessage(`"${e.title}" tem contas dentro, então não entra em outra credencial.`);
+      return;
+    }
+    const targets = vault.entries().filter((x) => !x.parentId && x.id !== e.id && x.id !== e.parentId);
+    const picks = [
+      ...(e.parentId ? [{ label: '$(key) Fora de qualquer credencial', description: 'vira uma credencial sozinha', parentId: null }] : []),
+      ...targets.map((x) => ({ label: `$(account) Conta de ${x.title}`, parentId: x.id })),
+    ];
+    if (!picks.length) return;
+    const to = await vscode.window.showQuickPick(picks, { title: `Mover "${e.title}"`, ignoreFocusOut: true });
+    if (!to) return;
+    const before = refs();
+    await vault.setParent(e.id, to.parentId);
+    await edited();
+    refsChanged(before);
   }
 
   async function renameField(item) {
@@ -398,7 +511,12 @@ function createCredentialsView(app, sidebar) {
   async function removeEntry(item) {
     if (!item || !(await ensureUnlocked())) return;
     const e = vault.entry(item.entryId);
-    const ok = await vscode.window.showWarningMessage(`Apagar a credencial "${e.title}"?`, { modal: true, detail: 'Sai do cofre com todos os campos. Não dá para desfazer.' }, 'Apagar');
+    const accounts = vault.accountsOf(e.id).length;
+    const ok = await vscode.window.showWarningMessage(
+      `Apagar ${e.parentId ? 'a conta' : 'a credencial'} "${e.title}"?`,
+      { modal: true, detail: `Sai do cofre com todos os campos${accounts ? ` e ${plural(accounts, 'conta', 'contas')}` : ''}. Não dá para desfazer.` },
+      'Apagar',
+    );
     if (!ok) return;
     await vault.removeEntry(e.id);
     await edited();
@@ -494,6 +612,8 @@ function createCredentialsView(app, sidebar) {
     addField,
     editField,
     renameEntry,
+    addAccount,
+    moveEntry,
     renameField,
     toggleSecret,
     removeEntry,

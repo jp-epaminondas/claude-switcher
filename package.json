@@ -191,33 +191,48 @@
         },
         {
           "command": "claudeSwitcher.cred.addField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
           "group": "inline@1"
         },
         {
           "command": "claudeSwitcher.cred.renameEntry",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
-          "group": "inline@2"
-        },
-        {
-          "command": "claudeSwitcher.cred.removeEntry",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
           "group": "inline@3"
         },
         {
+          "command": "claudeSwitcher.cred.removeEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
+          "group": "inline@4"
+        },
+        {
           "command": "claudeSwitcher.cred.addField",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
           "group": "1_cred@1"
         },
         {
           "command": "claudeSwitcher.cred.renameEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
+          "group": "1_cred@3"
+        },
+        {
+          "command": "claudeSwitcher.cred.removeEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
+          "group": "1_cred@5"
+        },
+        {
+          "command": "claudeSwitcher.cred.addAccount",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.cred.addAccount",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
           "group": "1_cred@2"
         },
         {
-          "command": "claudeSwitcher.cred.removeEntry",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem == credEntry",
-          "group": "1_cred@3"
+          "command": "claudeSwitcher.cred.moveEntry",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account)$/",
+          "group": "1_cred@4"
         },
         {
           "command": "claudeSwitcher.cred.copy",
@@ -351,6 +366,14 @@
         },
         {
           "command": "claudeSwitcher.cred.renameEntry",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.addAccount",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.moveEntry",
           "when": "false"
         },
         {
@@ -568,6 +591,17 @@
         "icon": "$(edit)"
       },
       {
+        "command": "claudeSwitcher.cred.addAccount",
+        "title": "Nova conta (ex.: outro usuário do mesmo serviço)",
+        "category": "Claude Switcher",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "claudeSwitcher.cred.moveEntry",
+        "title": "Mover para dentro de outra credencial / tirar de lá",
+        "category": "Claude Switcher"
+      },
+      {
         "command": "claudeSwitcher.cred.renameField",
         "title": "Renomear o campo",
         "category": "Claude Switcher"
@@ -579,7 +613,7 @@
       },
       {
         "command": "claudeSwitcher.cred.removeEntry",
-        "title": "Apagar a credencial",
+        "title": "Apagar",
         "category": "Claude Switcher",
         "icon": "$(trash)"
       },

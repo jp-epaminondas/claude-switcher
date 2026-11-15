@@ -116,9 +116,15 @@ async function lista() {
     return;
   }
   process.stdout.write(`cofre ${r.locked ? 'trancado (pede a senha mestra no primeiro uso)' : 'destrancado'}\n`);
-  for (const e of r.entries) {
+  const field = (e, f, pad) => process.stdout.write(`${pad}{{${e.ref}.${f.ref}}}  ${f.name}${f.secret ? '' : ' (não secreto)'}\n`);
+  // Accounts (PHPMYADMIN -> master, cliente X) under their entry, whose own fields serve them all.
+  for (const e of r.entries.filter((x) => !x.parentId)) {
     process.stdout.write(`\n${e.title}\n`);
-    for (const f of e.fields) process.stdout.write(`  {{${e.ref}.${f.ref}}}  ${f.name}${f.secret ? '' : ' (não secreto)'}\n`);
+    for (const f of e.fields) field(e, f, '  ');
+    for (const a of r.entries.filter((x) => x.parentId === e.id)) {
+      process.stdout.write(`  conta ${a.title}\n`);
+      for (const f of a.fields) field(a, f, '    ');
+    }
   }
 }
 

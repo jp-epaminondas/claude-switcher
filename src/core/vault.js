@@ -48,6 +48,7 @@ const slug = (s) =>
     .replace(/^-|-$/g, '') || 'item';
 
 // Gives every entry and field a ref that is unique and stable while its name doesn't change.
+// An account (an entry with parentId) is "<parent ref>-<account>": "phpmyadmin-master".
 function withRefs(data) {
   const taken = new Set();
   const unique = (base, used) => {
@@ -56,8 +57,15 @@ function withRefs(data) {
     used.add(ref);
     return ref;
   };
+  const byId = new Map(data.entries.map((e) => [e.id, e]));
+  // One level only: an account whose parent is gone, or is an account itself, stands alone.
   for (const e of data.entries) {
-    e.ref = unique(slug(e.title), taken);
+    const parent = e.parentId && byId.get(e.parentId);
+    if (e.parentId && (!parent || parent.parentId || parent === e)) delete e.parentId;
+  }
+  // Parents first, so their refs don't depend on where their accounts sit in the list.
+  for (const e of [...data.entries.filter((x) => !x.parentId), ...data.entries.filter((x) => x.parentId)]) {
+    e.ref = unique(e.parentId ? `${byId.get(e.parentId).ref}-${slug(e.title)}` : slug(e.title), taken);
     const fieldsTaken = new Set();
     for (const f of e.fields) f.ref = unique(slug(f.name), fieldsTaken);
   }
@@ -66,7 +74,13 @@ function withRefs(data) {
 
 // Names only: safe to keep in the clear and to hand to Claude.
 const catalogOf = (data) => ({
-  entries: data.entries.map((e) => ({ id: e.id, ref: e.ref, title: e.title, fields: e.fields.map((f) => ({ id: f.id, ref: f.ref, name: f.name, secret: !!f.secret })) })),
+  entries: data.entries.map((e) => ({
+    id: e.id,
+    ref: e.ref,
+    title: e.title,
+    ...(e.parentId ? { parentId: e.parentId } : {}),
+    fields: e.fields.map((f) => ({ id: f.id, ref: f.ref, name: f.name, secret: !!f.secret })),
+  })),
 });
 
 const newId = () => crypto.randomBytes(6).toString('hex');
@@ -189,11 +203,23 @@ class Vault {
     return e;
   }
 
-  async addEntry(title, fields = []) {
+  // The accounts inside an entry (PHPMYADMIN -> master, cliente X), in order.
+  accountsOf(id) {
+    return this.entries().filter((e) => e.parentId === id);
+  }
+
+  // With parentId, an account inside that entry.
+  async addEntry(title, fields = [], parentId = null) {
+    if (parentId) this.checkParent(parentId);
     const e = { id: newId(), title: String(title).trim() || 'Sem nome', fields: fields.map((f) => ({ id: newId(), name: f.name, value: f.value, secret: !!f.secret })) };
+    if (parentId) e.parentId = parentId;
     this.entries().push(e);
     await this.save();
     return e;
+  }
+
+  checkParent(parentId) {
+    if (this.entry(parentId).parentId) throw new Error('uma conta não pode ter contas dentro');
   }
 
   async renameEntry(id, title) {
@@ -201,8 +227,33 @@ class Vault {
     await this.save();
   }
 
+  // Takes its accounts with it.
   async removeEntry(id) {
-    this.data.entries = this.entries().filter((e) => e.id !== id);
+    this.data.entries = this.entries().filter((e) => e.id !== id && e.parentId !== id);
+    await this.save();
+  }
+
+  // Puts an entry inside another, as one of its accounts, or (parentId null) back on its own.
+  async setParent(id, parentId) {
+    const e = this.entry(id);
+    if (parentId) {
+      if (parentId === id) throw new Error('uma credencial não pode ficar dentro dela mesma');
+      this.checkParent(parentId);
+      if (this.accountsOf(id).length) throw new Error(`"${e.title}" tem contas dentro; tire as contas antes`);
+      e.parentId = parentId;
+    } else {
+      delete e.parentId;
+    }
+    await this.save();
+  }
+
+  // Moves fields between entries, keeping their order (the values that turn into an account).
+  async moveFields(fromId, toId, fieldIds) {
+    const from = this.entry(fromId);
+    const to = this.entry(toId);
+    const ids = new Set(fieldIds);
+    to.fields.push(...from.fields.filter((f) => ids.has(f.id)));
+    from.fields = from.fields.filter((f) => !ids.has(f.id));
     await this.save();
   }
 
@@ -229,7 +280,13 @@ class Vault {
     const e = this.entries().find((x) => x.ref === er);
     if (!e) throw new Error(`não existe a credencial "${er}" (veja segredo lista)`);
     const f = e.fields.find((x) => x.ref === fr);
-    if (!f) throw new Error(`"${er}" não tem o campo "${fr}"; tem: ${e.fields.map((x) => x.ref).join(', ')}`);
+    if (!f) {
+      // "phpmyadmin.senha" once the password moved into the accounts: point at them.
+      const inAccounts = this.accountsOf(e.id).filter((a) => a.fields.some((x) => x.ref === fr));
+      const has = e.fields.length ? `; tem: ${e.fields.map((x) => x.ref).join(', ')}` : '';
+      const accounts = inAccounts.length ? `. Está nas contas: ${inAccounts.map((a) => `${a.ref}.${fr}`).join(', ')}` : '';
+      throw new Error(`"${er}" não tem o campo "${fr}"${has}${accounts}`);
+    }
     return { entry: e, field: f };
   }
 }
