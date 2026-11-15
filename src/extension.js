@@ -17,6 +17,7 @@ const { createMenu } = require('./ui/menu');
 const { createStatusBar } = require('./ui/statusBar');
 const { createAutoSwitch } = require('./ui/autoSwitch');
 const { createTopicGuard } = require('./ui/topicGuard');
+const { createSameProject } = require('./ui/sameProject');
 const { createMemoriesView } = require('./ui/memoriesView');
 const { createCredentialsView } = require('./ui/credentialsView');
 
@@ -61,6 +62,7 @@ function activate(context) {
   const statusBar = createStatusBar(app);
   const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
   const topicGuard = (app.topicGuard = createTopicGuard(app));
+  const sameProject = (app.sameProject = createSameProject(app));
   const memoriesView = createMemoriesView(app, sidebar);
   const credentialsView = createCredentialsView(app, sidebar);
 
@@ -70,6 +72,7 @@ function activate(context) {
     statusBar,
     autoSwitch,
     topicGuard,
+    sameProject,
     memoriesView,
     credentialsView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
@@ -78,6 +81,7 @@ function activate(context) {
     vscode.commands.registerCommand('claudeSwitcher.refresh', () => tick({ force: true })),
     vscode.commands.registerCommand('claudeSwitcher.toggleAutoSwitch', autoSwitch.toggle),
     vscode.commands.registerCommand('claudeSwitcher.toggleTopicGuard', topicGuard.toggle),
+    vscode.commands.registerCommand('claudeSwitcher.toggleSameProject', sameProject.toggle),
     vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
     vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
     vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
@@ -86,6 +90,7 @@ function activate(context) {
         autoSwitch.onConfigChanged();
       }
       else if (e.affectsConfiguration('claudeSwitcher.topicGuard')) topicGuard.onConfigChanged();
+      else if (e.affectsConfiguration('claudeSwitcher.sameProject')) sameProject.onConfigChanged();
       else if (e.affectsConfiguration('claudeSwitcher')) render();
     }),
   );

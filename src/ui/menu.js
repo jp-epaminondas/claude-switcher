@@ -5,6 +5,8 @@ const vscode = require('vscode');
 const { reason } = require('../core/advisor');
 const { accountState, usageSummary, flagOf } = require('./present');
 
+const sameProjectNow = (n) => (n ? `ligado: ${n} ${n === 1 ? 'conversa' : 'conversas'} neste projeto agora` : 'ligado: uma conversa sabe o que a outra faz');
+
 function createMenu(app, actions) {
   let fill = null; // set while the menu is open
 
@@ -55,6 +57,9 @@ function createMenu(app, actions) {
         app.topicGuard && app.topicGuard.enabled()
           ? { label: '$(comment-discussion) Desligar aviso de assunto novo', description: 'ligado: sugere conversa nova numa conversa longa', action: 'topic' }
           : { label: '$(comment) Ligar aviso de assunto novo', description: 'sugere conversa nova quando o assunto muda numa conversa longa', action: 'topic' },
+        app.sameProject && app.sameProject.enabled()
+          ? { label: '$(organization) Desligar conversas no mesmo projeto', description: sameProjectNow(app.sameProject.countHere()), action: 'same' }
+          : { label: '$(person) Ligar conversas no mesmo projeto', description: 'duas conversas no mesmo projeto sabem o que a outra faz', action: 'same' },
         { label: '$(add) Adicionar conta…', action: 'add' },
         { label: '$(refresh) Atualizar uso agora', action: 'refresh' },
       ];
@@ -77,6 +82,7 @@ function createMenu(app, actions) {
       if (item.action === 'next') actions.switchNext();
       else if (item.action === 'auto') app.autoSwitch.toggle();
       else if (item.action === 'topic') app.topicGuard.toggle();
+      else if (item.action === 'same') app.sameProject.toggle();
       else if (item.action === 'add') actions.addAccount();
       else if (item.action === 'refresh') app.tick({ force: true });
       else if (item.account) actions.pickAccount(item.account);

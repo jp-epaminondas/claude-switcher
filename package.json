@@ -501,6 +501,12 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "claudeSwitcher.toggleSameProject",
+        "title": "Ligar/desligar conversas no mesmo projeto",
+        "category": "Claude Switcher",
+        "icon": "$(organization)"
+      },
+      {
         "command": "claudeSwitcher.memories.analyze",
         "title": "Analisar as memórias de novo",
         "category": "Claude Switcher",
@@ -746,6 +752,11 @@
           "default": 150,
           "minimum": 20,
           "description": "O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto. Abaixo disso o pedido segue direto, sem pergunta nenhuma."
+        },
+        "claudeSwitcher.sameProject": {
+          "type": "boolean",
+          "default": true,
+          "description": "Conversas no mesmo projeto: duas ou mais conversas do Claude Code abertas no mesmo projeto ficam sabendo o que a outra está fazendo (o pedido e os arquivos que ela mudou), para não perderem tempo investigando mudanças que não fizeram. Um git add -A, git commit -a, git stash, git checkout -- . ou git reset --hard que levaria ou apagaria o trabalho da outra é segurado uma vez, com o motivo; mandado de novo, ele passa. Instala hooks UserPromptSubmit, PreToolUse, PostToolUse, Stop e SessionEnd em ~/.claude/settings.json (precisa do Node.js) e os remove ao desligar."
         },
         "claudeSwitcher.switchAtPercent": {
           "type": "number",

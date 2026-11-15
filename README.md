@@ -21,7 +21,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
 - Quando uma conta esgotada volta, aparece *"✅ Conta 3 voltou e já está disponível. [Usar Conta 3]"*.
 
-**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Analisar as memórias de novo, Abrir o CLAUDE.md global.
+**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Ligar/desligar conversas no mesmo projeto, Analisar as memórias de novo, Abrir o CLAUDE.md global.
 
 ### Autoswitcher
 
@@ -53,6 +53,20 @@ Com o aviso ligado (padrão), antes de cada pedido ir para o modelo o switcher o
 - Na dúvida, ou se o Haiku não responder a tempo, o pedido segue.
 
 Ao ligar, a extensão instala um hook `UserPromptSubmit` em `~/.claude/settings.json`, e o remove ao desligar. Liga e desliga pelo menu da barra de status ou pelo comando "Ligar/desligar o aviso de assunto novo".
+
+### Conversas no mesmo projeto
+
+Duas conversas do Claude Code no mesmo projeto ao mesmo tempo, em duas abas ou duas janelas, costumam se atrapalhar. Uma vê no `git status` mudanças que não fez, ou um Edit falha porque o arquivo mudou desde a leitura, e ela perde tempo investigando quem mexeu. Às vezes ela até "conserta" ou faz commit do trabalho da outra.
+
+Com esta opção ligada (padrão), as conversas do mesmo projeto contam umas às outras o que estão fazendo:
+- **No pedido:** quando há outra conversa no projeto, o Claude recebe junto com o seu pedido quem é a outra, o que pediram a ela, se está trabalhando ou parada, e quais arquivos ela mudou e ainda não foram para commit. Recebe também as regras para não atrapalhar: não reverter nem consertar o que não fez, reler o arquivo e aplicar só a sua parte, fazer commit só dos seus arquivos e não trocar de branch. As regras vão uma vez. Depois, só o que mudou na outra conversa, e quando ela termina, um aviso de que agora só ele mexe no projeto.
+- **Antes de um Edit:** se o arquivo foi mudado pela outra conversa, o Claude é avisado antes de editar, uma vez por mudança dela. O Edit não é bloqueado.
+- **Antes de um comando git:** `git add -A`, `git add .`, `git commit -a`, `git stash`, `git checkout -- .`, `git restore`, `git reset --hard` e `git clean -f` são segurados quando levariam para o commit, apagariam ou esconderiam mudanças da outra conversa que ainda não foram para commit. Também são segurados um `git commit` com arquivos dela no índice e uma troca de branch enquanto ela trabalha. O Claude recebe o motivo e o que fazer no lugar, como `git add` só dos arquivos dele. Se o pedido era mesmo esse, ele manda o mesmo comando de novo em até 10 min e o comando passa.
+- **Projeto:** é o repositório git da pasta da conversa (ou a própria pasta, fora do git), então conversas em subpastas do mesmo repositório também se enxergam.
+- Um arquivo que esta conversa mudou depois da outra passa a contar como dela. Uma conversa sem sinal há mais de 3h fica de fora, e a que fecha sai na hora.
+- Só entram as mudanças feitas pelo Edit e pelo Write. Um arquivo mudado por um comando no terminal (um formatador, um script) não aparece como da outra conversa.
+
+Ao ligar, a extensão instala hooks `UserPromptSubmit`, `PreToolUse` (Edit, Write e Bash), `PostToolUse` (Edit e Write), `Stop` e `SessionEnd` em `~/.claude/settings.json`, e os remove ao desligar. Cada conversa guarda o que é dela em `~/.claude-switcher/sessions/`, e os hooks conversam por lá, sem depender de uma janela do VS Code aberta. Por isso vale também para o `claude` no terminal. Cada Edit e Bash espera o hook, que leva cerca de 0,1 s. No menu da barra de status aparece quantas conversas estão no projeto aberto agora. Liga e desliga por esse menu ou pelo comando "Ligar/desligar conversas no mesmo projeto".
 
 ### Qual conta usar (⭐ e 🔥)
 
@@ -177,6 +191,7 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 | `claudeSwitcher.autoSwitch` | `false` | Autoswitcher: troca sozinho quando a conta em uso esgota e o Claude continua a tarefa |
 | `claudeSwitcher.topicGuard` | `true` | Aviso de assunto novo: numa conversa longa, manda o pedido de outro assunto para uma conversa nova |
 | `claudeSwitcher.topicGuardMinContextK` | `150` | O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto |
+| `claudeSwitcher.sameProject` | `true` | Conversas no mesmo projeto: cada conversa sabe o que a outra faz e não leva nem apaga as mudanças dela no git |
 | `claudeSwitcher.switchAtPercent` | `99` | Com o autoswitcher ligado, troca no fim de uma resposta quando a conta chega a esta % (100 desliga) |
 | `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
 | `claudeSwitcher.notifyPace` | `true` | Avisos da previsão: pausa, todas as contas para esgotar, contas que não aguentam |
@@ -224,7 +239,7 @@ src/
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
-    claudeHook.js    instala e remove os hooks do autoswitcher e do aviso de assunto novo no settings.json do Claude Code
+    claudeHook.js    instala e remove os hooks do autoswitcher, do aviso de assunto novo e das conversas no mesmo projeto no settings.json do Claude Code
     limitQueue.js    fila de pedidos entre um hook e a extensão (~/.claude-switcher/limits/ e topics/)
     topic.js         aviso de assunto novo: lê o fim da conversa e monta a pergunta ao Haiku
     store.js         accounts.json e memories.json compartilhados entre janelas
@@ -233,6 +248,7 @@ src/
   hook/
     limit-hook.js    roda dentro do Claude Code no fim de cada resposta e quando o limite estoura (copiado para ~/.claude-switcher/)
     topic-hook.js    roda dentro do Claude Code antes de cada pedido ir para o modelo (copiado para ~/.claude-switcher/)
+    peer-hook.js     roda dentro de cada conversa e conta às outras do mesmo projeto o que ela faz; segura o git que levaria o trabalho delas (copiado para ~/.claude-switcher/)
     uninstall.js     tira os hooks do settings.json quando a extensão é desinstalada
     segredo.js       o comando que o Claude usa para rodar algo com uma credencial (copiado para ~/.claude-switcher/)
   ui/                tudo que aparece no VS Code
@@ -245,6 +261,7 @@ src/
     actions.js       trocar, adicionar, renomear, remover e as notificações
     autoSwitch.js    liga/desliga o autoswitcher e atende os pedidos do hook
     topicGuard.js    liga/desliga o aviso de assunto novo, atende o hook e manda o pedido para uma conversa nova
+    sameProject.js   liga/desliga as conversas no mesmo projeto e conta quantas há no projeto aberto
     present.js       textos de cada conta, compartilhados pelas telas
 test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
 media/               ícone da barra lateral

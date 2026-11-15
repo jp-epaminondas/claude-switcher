@@ -6,6 +6,7 @@ const { writeFileAtomic } = require('./fsutil');
 
 const LIMIT_SCRIPT = 'limit-hook.js';
 const TOPIC_SCRIPT = 'topic-hook.js';
+const PEER_SCRIPT = 'peer-hook.js';
 
 const settingsFile = (paths) => path.join(paths.configDir, 'settings.json');
 const isOurs = (h, script) => !!h && [h.command, ...(Array.isArray(h.args) ? h.args : [])].some((s) => typeof s === 'string' && s.endsWith(script));
@@ -45,7 +46,22 @@ function syncTopicHook(paths, switcherDir, { enabled, nodePath = null }) {
   }));
 }
 
-// Both features rewrite the same settings.json, so one write at a time.
+// Conversations in the same project: each one tells the others what it is doing.
+const EDIT_TOOLS = 'Edit|Write|MultiEdit|NotebookEdit';
+function syncPeerHook(paths, switcherDir, { enabled, nodePath = null }) {
+  return syncScript(paths, switcherDir, PEER_SCRIPT, { enabled, nodePath }, (command, script) => {
+    const hook = (extra = {}) => ({ type: 'command', command, args: [script], timeout: 10, ...extra });
+    return {
+      UserPromptSubmit: { hooks: [hook()] },
+      PreToolUse: { matcher: `${EDIT_TOOLS}|Bash`, hooks: [hook()] },
+      PostToolUse: { matcher: EDIT_TOOLS, hooks: [hook({ async: true })] },
+      Stop: { hooks: [hook({ async: true })] },
+      SessionEnd: { hooks: [hook()] },
+    };
+  });
+}
+
+// The features rewrite the same settings.json, so one write at a time.
 let writing = Promise.resolve();
 function syncScript(...args) {
   const run = writing.then(() => syncScriptNow(...args));
@@ -106,4 +122,4 @@ function copyIfChanged(from, to) {
   fs.writeFileSync(to, text, 'utf8');
 }
 
-module.exports = { syncHook, syncTopicHook, findNode, settingsFile, copyIfChanged };
+module.exports = { syncHook, syncTopicHook, syncPeerHook, findNode, settingsFile, copyIfChanged };
