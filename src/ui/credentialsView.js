@@ -201,7 +201,7 @@ function createCredentialsView(app, sidebar) {
         }),
       ];
     }
-    const items = [statusItem()];
+    const items = [statusItem(), lockTimeItem()];
     const values = vault.unlocked ? new Map(vault.entries().map((e) => [e.id, e])) : null;
     const entries = vault.catalog().entries;
     for (const e of entries.filter((x) => !x.parentId)) {
@@ -234,6 +234,16 @@ function createCredentialsView(app, sidebar) {
     }
     t.tooltip = `O Claude usa as credenciais pelo segredo, sem ver os valores:\nnode ${script} lista\nnode ${script} exec -- comando {{credencial.campo}}`;
     return t;
+  }
+
+  function lockTimeItem() {
+    return Object.assign(new vscode.TreeItem('Pedir a senha de novo depois de', None), {
+      id: 'cred.lockTime',
+      iconPath: icon('clock'),
+      description: `${fmtMinutes(lockMinutes())} · clique para mudar`,
+      tooltip: 'Quanto tempo o cofre fica destrancado depois da senha mestra, em todas as janelas.',
+      command: { command: 'claudeSwitcher.cred.lockTime', title: 'Mudar o tempo' },
+    });
   }
 
   // An entry: its own fields (shared by all its accounts), then its accounts.
@@ -644,8 +654,7 @@ function createCredentialsView(app, sidebar) {
 
   // An open vault starts counting the new time from now.
   function onLockMinutesChanged() {
-    if (!vault.unlocked) return;
-    arm(Date.now() + lockMinutes() * 60 * 1000);
+    if (vault.unlocked) arm(Date.now() + lockMinutes() * 60 * 1000);
     refresh();
   }
 
