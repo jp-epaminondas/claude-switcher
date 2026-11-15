@@ -36,6 +36,12 @@
           "id": "claudeSwitcher.accounts",
           "name": "Contas",
           "icon": "media/switcher.svg"
+        },
+        {
+          "type": "webview",
+          "id": "claudeSwitcher.approvals",
+          "name": "Aprovações",
+          "icon": "media/switcher.svg"
         }
       ]
     },
@@ -507,6 +513,12 @@
         "icon": "$(organization)"
       },
       {
+        "command": "claudeSwitcher.toggleApprovals",
+        "title": "Ligar/desligar as aprovações",
+        "category": "Claude Switcher",
+        "icon": "$(bell)"
+      },
+      {
         "command": "claudeSwitcher.memories.analyze",
         "title": "Analisar as memórias de novo",
         "category": "Claude Switcher",
@@ -757,6 +769,16 @@
           "type": "boolean",
           "default": true,
           "description": "Conversas no mesmo projeto: duas ou mais conversas do Claude Code abertas no mesmo projeto ficam sabendo o que a outra está fazendo (o pedido e os arquivos que ela mudou), para não perderem tempo investigando mudanças que não fizeram. Um git add -A, git commit -a, git stash, git checkout -- . ou git reset --hard que levaria ou apagaria o trabalho da outra é segurado uma vez, com o motivo; mandado de novo, ele passa. Instala hooks UserPromptSubmit, PreToolUse, PostToolUse, Stop e SessionEnd em ~/.claude/settings.json (precisa do Node.js) e os remove ao desligar."
+        },
+        "claudeSwitcher.approvals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Aprovações: os pedidos de permissão de todas as conversas do Claude Code, em todas as janelas, aparecem no painel Aprovações da janela em que você estiver, com o contexto (de qual janela e conversa vieram, o que foi pedido, o comando ou a mudança) e os botões Aprovar, Sempre permitir, Negar e Parar. O pedido continua na aba da conversa também: vale a primeira resposta. Só vale para as conversas da extensão do Claude Code no VS Code; no terminal nada muda. Instala um hook PermissionRequest em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
+        },
+        "claudeSwitcher.approvalsReveal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Quando chega um pedido de permissão, abre o painel Aprovações na janela em que você está (sem tirar o cursor de onde ele está)."
         },
         "claudeSwitcher.switchAtPercent": {
           "type": "number",

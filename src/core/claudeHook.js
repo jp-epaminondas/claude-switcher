@@ -7,6 +7,7 @@ const { writeFileAtomic } = require('./fsutil');
 const LIMIT_SCRIPT = 'limit-hook.js';
 const TOPIC_SCRIPT = 'topic-hook.js';
 const PEER_SCRIPT = 'peer-hook.js';
+const APPROVAL_SCRIPT = 'approval-hook.js';
 
 const settingsFile = (paths) => path.join(paths.configDir, 'settings.json');
 const isOurs = (h, script) => !!h && [h.command, ...(Array.isArray(h.args) ? h.args : [])].some((s) => typeof s === 'string' && s.endsWith(script));
@@ -59,6 +60,14 @@ function syncPeerHook(paths, switcherDir, { enabled, nodePath = null }) {
       SessionEnd: { hooks: [hook()] },
     };
   });
+}
+
+// Aprovações: every permission request waits for an answer from the panel, while the dialog in
+// the conversation shows too. The hook waits up to an hour, so its timeout is that long.
+function syncApprovalHook(paths, switcherDir, { enabled, nodePath = null }) {
+  return syncScript(paths, switcherDir, APPROVAL_SCRIPT, { enabled, nodePath }, (command, script) => ({
+    PermissionRequest: { hooks: [{ type: 'command', command, args: [script], timeout: 3600 }] },
+  }));
 }
 
 // The features rewrite the same settings.json, so one write at a time.
@@ -122,4 +131,4 @@ function copyIfChanged(from, to) {
   fs.writeFileSync(to, text, 'utf8');
 }
 
-module.exports = { syncHook, syncTopicHook, syncPeerHook, findNode, settingsFile, copyIfChanged };
+module.exports = { syncHook, syncTopicHook, syncPeerHook, syncApprovalHook, findNode, settingsFile, copyIfChanged };
