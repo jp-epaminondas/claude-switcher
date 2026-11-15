@@ -47,9 +47,9 @@ Cada resposta do Claude relê a conversa inteira. Numa conversa de 500k tokens, 
 Com o aviso ligado (padrão), antes de cada pedido ir para o modelo o switcher olha o tamanho da conversa:
 - Abaixo de 150k tokens de contexto (`claudeSwitcher.topicGuardMinContextK`), o pedido segue direto, sem pergunta nenhuma.
 - Acima disso, o Haiku compara o pedido com os últimos pedidos da conversa, numa pergunta curta que leva de 5 a 10 s. Respostas curtas ("sim", "continue") e comandos (`/compact`) seguem direto.
-- Se for outro assunto, o pedido é segurado e aparece *"Assunto novo (instalador do bloqueio) numa conversa que já tem 520k tokens de contexto… [Abrir nova conversa] [Continuar nesta]"*.
-- **Abrir nova conversa** abre uma conversa do Claude Code já com o pedido digitado; ele também fica copiado.
-- **Continuar nesta** copia o pedido para você colar e enviar de novo. Enviar o mesmo pedido de novo também passa. Depois disso o switcher só pergunta de novo quando a conversa crescer mais 150k.
+- Se for outro assunto, o pedido não entra nessa conversa: o switcher abre uma conversa nova do Claude Code e já envia o pedido nela, sem perguntar. Aparece *"Assunto novo (instalador do bloqueio) numa conversa que já tem 520k tokens de contexto: mandei o pedido para uma conversa nova."*
+- O Claude Code só deixa abrir a conversa com o pedido digitado, então o switcher aperta Enter por você, e só enquanto a aba nova estiver na frente. Se você tiver ido para outra janela, o pedido fica digitado na conversa nova e é só apertar Enter.
+- Para manter o pedido na conversa antiga, envie o mesmo pedido de novo lá. Depois disso o switcher só olha de novo quando a conversa crescer mais 150k.
 - Na dúvida, ou se o Haiku não responder a tempo, o pedido segue.
 
 Ao ligar, a extensão instala um hook `UserPromptSubmit` em `~/.claude/settings.json`, e o remove ao desligar. Liga e desliga pelo menu da barra de status ou pelo comando "Ligar/desligar o aviso de assunto novo".
@@ -174,7 +174,7 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 | Configuração | Padrão | O que faz |
 |---|---|---|
 | `claudeSwitcher.autoSwitch` | `false` | Autoswitcher: troca sozinho quando a conta em uso esgota e o Claude continua a tarefa |
-| `claudeSwitcher.topicGuard` | `true` | Aviso de assunto novo: numa conversa longa, segura o pedido de outro assunto e oferece uma conversa nova |
+| `claudeSwitcher.topicGuard` | `true` | Aviso de assunto novo: numa conversa longa, manda o pedido de outro assunto para uma conversa nova |
 | `claudeSwitcher.topicGuardMinContextK` | `150` | O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto |
 | `claudeSwitcher.switchAtPercent` | `99` | Com o autoswitcher ligado, troca no fim de uma resposta quando a conta chega a esta % (100 desliga) |
 | `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
@@ -243,7 +243,7 @@ src/
     menu.js          menu rápido
     actions.js       trocar, adicionar, renomear, remover e as notificações
     autoSwitch.js    liga/desliga o autoswitcher e atende os pedidos do hook
-    topicGuard.js    liga/desliga o aviso de assunto novo, atende o hook e oferece a conversa nova
+    topicGuard.js    liga/desliga o aviso de assunto novo, atende o hook e manda o pedido para uma conversa nova
     present.js       textos de cada conta, compartilhados pelas telas
 test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
 media/               ícone da barra lateral

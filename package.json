@@ -665,7 +665,7 @@
         "claudeSwitcher.topicGuard": {
           "type": "boolean",
           "default": true,
-          "description": "Aviso de assunto novo: numa conversa longa do Claude Code, um pedido de outro assunto é segurado antes de ir para o modelo, e o switcher oferece abrir uma conversa nova já com o pedido. Cada resposta relê o contexto inteiro, então numa conversa longa é ali que vai a maior parte dos tokens. Para continuar na mesma conversa, envie o pedido de novo. Quem decide se o assunto mudou é o Haiku, numa pergunta curta. Instala um hook UserPromptSubmit em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
+          "description": "Aviso de assunto novo: numa conversa longa do Claude Code, um pedido de outro assunto é segurado antes de ir para o modelo, e o switcher abre uma conversa nova e já envia o pedido nela, sem perguntar. Cada resposta relê o contexto inteiro, então numa conversa longa é ali que vai a maior parte dos tokens. Para manter o pedido na conversa antiga, envie o mesmo pedido de novo lá. Quem decide se o assunto mudou é o Haiku, numa pergunta curta. Instala um hook UserPromptSubmit em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
         },
         "claudeSwitcher.topicGuardMinContextK": {
           "type": "number",

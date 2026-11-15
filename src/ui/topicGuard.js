@@ -2,7 +2,8 @@
 
 // Topic guard: a UserPromptSubmit hook in Claude Code's settings asks this side about every
 // prompt. In a conversation whose context is past topicGuardMinContextK, a prompt that starts
-// a new subject is held back, and a notice offers to open a new conversation with it.
+// a new subject is held back and sent in a new conversation instead.
+const { execFile } = require('child_process');
 const vscode = require('vscode');
 const { LimitQueue } = require('../core/limitQueue');
 const { syncTopicHook, findNode, settingsFile } = require('../core/claudeHook');
@@ -11,6 +12,27 @@ const { readConversation, quickVerdict, classification, blockReason, fmtK, Topic
 const POLL_MS = 250;
 const HEARTBEAT_MS = 15 * 1000;
 const CLASSIFY_MS = 25 * 1000; // the hook waits 30s
+const SEND_FIRST_MS = 1500; // the new conversation takes a moment to show the prompt
+const SEND_EVERY_MS = 1500;
+const SEND_TRIES = 8;
+
+const normalize = (s) => String(s).trim().replace(/\s+/g, ' ');
+
+const activeTab = () => vscode.window.tabGroups.activeTabGroup.activeTab;
+const isClaudePanel = (tab) => tab?.input instanceof vscode.TabInputWebview && tab.input.viewType.includes('claudeVSCodePanel');
+
+// Presses Enter in whatever has the keyboard: there is no command that sends a prompt.
+function pressEnter() {
+  const run =
+    process.platform === 'win32'
+      ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "(New-Object -ComObject WScript.Shell).SendKeys('~')"]]
+      : process.platform === 'darwin'
+        ? ['osascript', ['-e', 'tell application "System Events" to key code 36']]
+        : ['xdotool', ['key', 'Return']];
+  return new Promise((resolve, reject) => {
+    execFile(run[0], run[1], { windowsHide: true, timeout: 10 * 1000 }, (e) => (e ? reject(e) : resolve()));
+  });
+}
 
 function createTopicGuard(app) {
   const { paths, log } = app;
@@ -18,6 +40,7 @@ function createTopicGuard(app) {
   const state = new TopicState(queue.dir);
   const enabled = () => !!app.config().get('topicGuard', true);
   const minTokens = () => Math.max(20, Number(app.config().get('topicGuardMinContextK')) || 150) * 1000;
+  const pending = new Set(); // prompts being sent in a new conversation
   let syncing = Promise.resolve();
   let lastBeat = 0;
 
@@ -41,7 +64,7 @@ function createTopicGuard(app) {
     await syncClaudeHook();
     vscode.window.showInformationMessage(
       on
-        ? `Aviso de assunto novo ligado. Numa conversa com mais de ${fmtK(minTokens())} tokens de contexto, um pedido de outro assunto é segurado e o switcher oferece uma conversa nova.`
+        ? `Aviso de assunto novo ligado. Numa conversa com mais de ${fmtK(minTokens())} tokens de contexto, um pedido de outro assunto vai para uma conversa nova.`
         : 'Aviso de assunto novo desligado.',
     );
   }
@@ -61,6 +84,7 @@ function createTopicGuard(app) {
   }
 
   async function handle(id, req) {
+    arrived(req);
     let verdict = { block: false };
     try {
       verdict = await judge(req);
@@ -68,7 +92,7 @@ function createTopicGuard(app) {
       log(`aviso de assunto novo: ${e.message}`);
     }
     await queue.answer(id, verdict.block ? { block: true, reason: verdict.reason } : { block: false }).catch((e) => log(`aviso de assunto novo: ${e.message}`));
-    if (verdict.block) offer(req, verdict);
+    if (verdict.block) moveToNewConversation(req, verdict).catch((e) => log(`aviso de assunto novo: ${e.message}`));
   }
 
   async function judge(req) {
@@ -95,28 +119,57 @@ function createTopicGuard(app) {
     return { block: true, reason: blockReason(conv, answer.assunto), conv, subject: answer.assunto };
   }
 
-  async function offer(req, { conv, subject }) {
-    const open = 'Abrir nova conversa';
-    const stay = 'Continuar nesta';
-    const choice = await vscode.window.showWarningMessage(
-      `Assunto novo (${subject}) numa conversa que já tem ${fmtK(conv.contextTokens)} tokens de contexto, relidos a cada resposta. O pedido não foi enviado.`,
-      open,
-      stay,
-    );
-    if (choice === open) {
+  // Opens a new conversation with the prompt and sends it. Claude Code only types an initial
+  // prompt in, so Enter is pressed for it until the new conversation's hook reports the prompt.
+  async function moveToNewConversation(req, { conv, subject }) {
+    const from = `Assunto novo (${subject}) numa conversa que já tem ${fmtK(conv.contextTokens)} tokens de contexto`;
+    const before = activeTab();
+    try {
+      // (sessionId, initialPrompt): no session id opens a new conversation with the prompt typed in.
+      await vscode.commands.executeCommand('claude-vscode.editor.open', undefined, req.prompt);
+    } catch (e) {
+      log(`aviso de assunto novo: não abri a conversa nova (${e.message})`);
       await vscode.env.clipboard.writeText(req.prompt);
-      try {
-        // (sessionId, initialPrompt): no session id opens a new conversation with the prompt typed in.
-        await vscode.commands.executeCommand('claude-vscode.editor.open', undefined, req.prompt);
-      } catch (e) {
-        log(`aviso de assunto novo: não abri a conversa nova (${e.message})`);
-        vscode.window.showInformationMessage('Não consegui abrir uma conversa nova. O pedido foi copiado: abra uma conversa e cole.');
-      }
-    } else if (choice === stay) {
-      state.set(req.sessionId, { mutedAt: conv.contextTokens });
-      await vscode.env.clipboard.writeText(req.prompt);
-      vscode.window.showInformationMessage('Pedido copiado. Cole e envie de novo nessa conversa; o switcher não pergunta mais até ela crescer bastante.');
+      vscode.window.showWarningMessage(`${from}. Não consegui abrir uma conversa nova. O pedido foi copiado: abra uma conversa e cole.`);
+      return;
     }
+    // The new conversation's tab, never the old one: its input may hold the prompt again.
+    const tab = activeTab();
+    const sent = tab !== before && isClaudePanel(tab) && (await sendTyped(req, tab));
+    log(`sessão ${req.sessionId}: pedido ${sent ? 'enviado' : 'digitado'} numa conversa nova`);
+    vscode.window.showInformationMessage(
+      sent
+        ? `${from}: mandei o pedido para uma conversa nova. Para mantê-lo na anterior, envie o mesmo pedido de novo lá.`
+        : `${from}: abri uma conversa nova com o pedido digitado. Aperte Enter nela para enviar.`,
+    );
+  }
+
+  function sendTyped(req, tab) {
+    return new Promise((resolve) => {
+      let tries = 0;
+      let timer;
+      const p = { prompt: normalize(req.prompt), from: req.sessionId };
+      p.done = (ok) => {
+        clearTimeout(timer);
+        pending.delete(p);
+        resolve(ok);
+      };
+      const step = () => {
+        if (tries++ >= SEND_TRIES) return p.done(false);
+        // Only into the new conversation's input: Enter anywhere else would land in a file.
+        // An Enter too early finds the input empty and does nothing.
+        if (vscode.window.state.focused && activeTab() === tab) pressEnter().catch((e) => log(`aviso de assunto novo: Enter (${e.message})`));
+        timer = setTimeout(step, SEND_EVERY_MS);
+      };
+      pending.add(p);
+      timer = setTimeout(step, SEND_FIRST_MS);
+    });
+  }
+
+  // A prompt from another conversation that one of the pending sends is waiting for.
+  function arrived(req) {
+    const p = [...pending].find((x) => x.from !== req.sessionId && x.prompt === normalize(req.prompt));
+    if (p) p.done(true);
   }
 
   const timer = setInterval(poll, POLL_MS);

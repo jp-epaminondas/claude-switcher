@@ -121,7 +121,7 @@ function blockReason(conv, subject) {
   const what = subject ? `um assunto novo (${subject})` : 'um assunto novo';
   return (
     `Claude Switcher: isto parece ${what}, e esta conversa já carrega ${fmtK(conv.contextTokens)} tokens de contexto, relidos a cada resposta. ` +
-    'Abra uma conversa nova para ele: o aviso do switcher tem um botão que já leva o pedido. Para continuar aqui mesmo, envie o mesmo pedido de novo.'
+    'O switcher abriu uma conversa nova e mandou o pedido para lá. Para continuar aqui mesmo, envie o mesmo pedido de novo.'
   );
 }
 
