@@ -26,6 +26,18 @@ const icon = (id, color) => new vscode.ThemeIcon(id, color ? new vscode.ThemeCol
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+// What a non-secret field holds, by its name.
+const FIELD_ICONS = [
+  [/^(usu[aá]rio|user|login|conta)/i, 'person'],
+  [/(e-?mail)/i, 'mail'],
+  [/^(url|link|site|endere[cç]o|painel)/i, 'link'],
+  [/^(host|servidor|server|ip|dom[ií]nio)/i, 'server'],
+  [/^(porta|port)\b/i, 'plug'],
+  [/^(caminho|pasta|path|dir)/i, 'folder'],
+  [/^(banco|database|db|schema)\b/i, 'database'],
+];
+const fieldIcon = (name) => (FIELD_ICONS.find(([re]) => re.test(name)) || [])[1] || 'symbol-field';
+
 function createCredentialsView(app, sidebar) {
   const { switcherDir, log } = app;
   const vault = new Vault(switcherDir);
@@ -244,7 +256,7 @@ function createCredentialsView(app, sidebar) {
     const shown = value != null && (!f.secret || revealed.has(f.id));
     // credField, credFieldSecret or credFieldSecret.revealed: the eye shows on secret ones.
     c.contextValue = f.secret ? (revealed.has(f.id) ? 'credFieldSecret.revealed' : 'credFieldSecret') : 'credField';
-    c.iconPath = icon(f.secret ? (revealed.has(f.id) ? 'eye' : 'lock-small') : 'symbol-field');
+    c.iconPath = icon(f.secret ? (revealed.has(f.id) ? 'eye' : 'lock-small') : fieldIcon(f.name));
     c.description = shown ? clip(value, 60) : '••••••••';
     c.tooltip = `${f.name}${f.secret ? ' (secreto)' : ''}\nNo segredo: {{${e.ref}.${f.ref}}}\n\nClique para copiar o valor (some da área de transferência em 30 s).`;
     c.command = { command: 'claudeSwitcher.cred.copy', title: 'Copiar', arguments: [c] };
@@ -468,6 +480,16 @@ function createCredentialsView(app, sidebar) {
     }
   }
 
+  // A field one place up or down inside its entry; an entry or account among its siblings.
+  async function shift(item, delta) {
+    if (!item || !(await ensureUnlocked())) return;
+    const before = refs();
+    const moved = item.fieldId ? await vault.shiftField(item.entryId, item.fieldId, delta) : await vault.shiftEntry(item.entryId, delta);
+    if (!moved) return;
+    await edited();
+    refsChanged(before); // two fields with the same name swap "senha" and "senha-2"
+  }
+
   // Puts an entry inside another one as an account, or takes an account out on its own.
   async function moveEntry(item) {
     if (!item || !(await ensureUnlocked())) return;
@@ -614,6 +636,8 @@ function createCredentialsView(app, sidebar) {
     renameEntry,
     addAccount,
     moveEntry,
+    moveUp: (item) => shift(item, -1),
+    moveDown: (item) => shift(item, 1),
     renameField,
     toggleSecret,
     removeEntry,

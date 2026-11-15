@@ -85,6 +85,12 @@ const catalogOf = (data) => ({
 
 const newId = () => crypto.randomBytes(6).toString('hex');
 
+function swap(list, i, j) {
+  if (j < 0 || j >= list.length || i === j) return false;
+  [list[i], list[j]] = [list[j], list[i]];
+  return true;
+}
+
 class Vault {
   constructor(switcherDir) {
     this.file = vaultPath(switcherDir);
@@ -266,6 +272,26 @@ class Vault {
     if (secret !== undefined) f.secret = !!secret;
     await this.save();
     return f;
+  }
+
+  // One place up (-1) or down (+1); false when already at that end.
+  async shiftField(entryId, fieldId, delta) {
+    const list = this.entry(entryId).fields;
+    const i = list.findIndex((f) => f.id === fieldId);
+    if (i < 0 || !swap(list, i, i + delta)) return false;
+    await this.save();
+    return true;
+  }
+
+  // The same among its siblings: the other loose entries, or the other accounts of its entry.
+  async shiftEntry(id, delta) {
+    const all = this.entries();
+    const e = this.entry(id);
+    const siblings = all.filter((x) => (x.parentId || null) === (e.parentId || null));
+    const other = siblings[siblings.indexOf(e) + delta];
+    if (!other || !swap(all, all.indexOf(e), all.indexOf(other))) return false;
+    await this.save();
+    return true;
   }
 
   async removeField(entryId, fieldId) {

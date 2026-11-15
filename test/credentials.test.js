@@ -96,6 +96,15 @@ test('vault: accounts inside an entry, with their own refs and the shared fields
   await v.setParent(solo.id, null);
   assert.equal(v.resolve('cloudflare.chave').field.value, 'k');
 
+  // Up and down: fields inside their entry, accounts among the accounts of the same entry.
+  const m = v.entry(master.id);
+  assert.equal(await v.shiftField(m.id, m.fields[1].id, -1), true);
+  assert.deepEqual(m.fields.map((f) => f.name), ['Senha', 'Usuário']);
+  assert.equal(await v.shiftField(m.id, m.fields[0].id, -1), false, 'already first');
+  assert.equal(await v.shiftEntry(master.id, 1), true);
+  assert.deepEqual(v.accountsOf(pma.id).map((a) => a.title), ['Cliente X', 'master']);
+  assert.equal(await v.shiftEntry(master.id, 1), false, 'already the last account');
+
   await v.removeEntry(pma.id);
   assert.deepEqual(v.entries().map((e) => e.title), ['Cloudflare'], 'the accounts go with it');
 });

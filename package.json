@@ -235,6 +235,16 @@
           "group": "1_cred@4"
         },
         {
+          "command": "claudeSwitcher.cred.moveUp",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account|Field)/",
+          "group": "0_order@1"
+        },
+        {
+          "command": "claudeSwitcher.cred.moveDown",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^cred(Entry|Account|Field)/",
+          "group": "0_order@2"
+        },
+        {
           "command": "claudeSwitcher.cred.copy",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && viewItem =~ /^credField/",
           "group": "inline@1"
@@ -374,6 +384,14 @@
         },
         {
           "command": "claudeSwitcher.cred.moveEntry",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.cred.moveDown",
           "when": "false"
         },
         {
@@ -600,6 +618,18 @@
         "command": "claudeSwitcher.cred.moveEntry",
         "title": "Mover para dentro de outra credencial / tirar de lá",
         "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.cred.moveUp",
+        "title": "Mover para cima",
+        "category": "Claude Switcher",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "claudeSwitcher.cred.moveDown",
+        "title": "Mover para baixo",
+        "category": "Claude Switcher",
+        "icon": "$(arrow-down)"
       },
       {
         "command": "claudeSwitcher.cred.renameField",
