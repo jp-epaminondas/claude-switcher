@@ -1,7 +1,7 @@
 {
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
-  "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta e junta no CLAUDE.md as preferências repetidas nos projetos.",
+  "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta, junta no CLAUDE.md as preferências repetidas nos projetos e sugere skills para as tarefas que você pede de novo e de novo.",
   "version": "0.15.3",
   "publisher": "local",
   "license": "MIT",
@@ -76,24 +76,34 @@
           "group": "0_pages@2"
         },
         {
+          "command": "claudeSwitcher.showSkills",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != skills",
+          "group": "0_pages@3"
+        },
+        {
+          "command": "claudeSwitcher.showSkillsCurrent",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills",
+          "group": "0_pages@3"
+        },
+        {
           "command": "claudeSwitcher.showCredentials",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != credentials",
-          "group": "0_pages@3"
+          "group": "0_pages@4"
         },
         {
           "command": "claudeSwitcher.showCredentialsCurrent",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials",
-          "group": "0_pages@3"
+          "group": "0_pages@4"
         },
         {
           "command": "claudeSwitcher.showApprovals",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != approvals",
-          "group": "0_pages@4"
+          "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.showApprovalsCurrent",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals",
-          "group": "0_pages@4"
+          "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.showAccounts",
@@ -106,14 +116,19 @@
           "group": "0_pages@2"
         },
         {
-          "command": "claudeSwitcher.showCredentials",
+          "command": "claudeSwitcher.showSkills",
           "when": "view == claudeSwitcher.approvals",
           "group": "0_pages@3"
         },
         {
-          "command": "claudeSwitcher.showApprovalsCurrent",
+          "command": "claudeSwitcher.showCredentials",
           "when": "view == claudeSwitcher.approvals",
           "group": "0_pages@4"
+        },
+        {
+          "command": "claudeSwitcher.showApprovalsCurrent",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.addAccount",
@@ -169,6 +184,16 @@
           "command": "claudeSwitcher.memories.addInstruction",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
           "group": "navigation@0"
+        },
+        {
+          "command": "claudeSwitcher.skills.add",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.analyze",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -366,6 +391,61 @@
           "command": "claudeSwitcher.memories.openProjectFile",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMdFile",
           "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.create",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^skillSuggestion/",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.ignore",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^skillSuggestion/",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.skills.create",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^skillSuggestion/",
+          "group": "1_skill@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.ignore",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^skillSuggestion/",
+          "group": "1_skill@2"
+        },
+        {
+          "command": "claudeSwitcher.skills.install",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem == skillDraft",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.discard",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem == skillDraft",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudeSwitcher.skills.install",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem == skillDraft",
+          "group": "1_skill@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.review",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem == skillDraft",
+          "group": "1_skill@2"
+        },
+        {
+          "command": "claudeSwitcher.skills.discard",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem == skillDraft",
+          "group": "1_skill@3"
+        },
+        {
+          "command": "claudeSwitcher.skills.remove",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^(user|project)Skill$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.remove",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && viewItem =~ /^(user|project)Skill$/",
+          "group": "1_skill@1"
         }
       ],
       "commandPalette": [
@@ -484,6 +564,63 @@
         {
           "command": "claudeSwitcher.memories.openProjectFile",
           "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.showSkillsCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.create",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.ignore",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.clearIgnored",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.install",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.discard",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.review",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.openDraft",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.remove",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.skills.openConversation",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "claudeSwitcher.skills.install",
+          "when": "resourceFilename == SKILL.md && resourcePath =~ /skill-drafts/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.skills.review",
+          "when": "resourceFilename == SKILL.md && resourcePath =~ /skill-drafts/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudeSwitcher.skills.discard",
+          "when": "resourceFilename == SKILL.md && resourcePath =~ /skill-drafts/",
+          "group": "navigation@3"
         }
       ]
     },
@@ -607,6 +744,16 @@
       {
         "command": "claudeSwitcher.showMemoriesCurrent",
         "title": "✓ Memórias",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showSkills",
+        "title": "Skills",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showSkillsCurrent",
+        "title": "✓ Skills",
         "category": "Claude Switcher"
       },
       {
@@ -784,6 +931,76 @@
         "title": "Abrir o arquivo",
         "category": "Claude Switcher",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "claudeSwitcher.skills.analyze",
+        "title": "Procurar tarefas repetidas para virar skills",
+        "category": "Claude Switcher",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeSwitcher.skills.add",
+        "title": "Nova skill",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.skills.addProject",
+        "title": "Nova skill do projeto",
+        "category": "Claude Switcher",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeSwitcher.skills.create",
+        "title": "Criar skill",
+        "category": "Claude Switcher",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "claudeSwitcher.skills.ignore",
+        "title": "Ignorar",
+        "category": "Claude Switcher",
+        "icon": "$(close)"
+      },
+      {
+        "command": "claudeSwitcher.skills.clearIgnored",
+        "title": "Mostrar as sugestões de skill ignoradas",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.skills.install",
+        "title": "Instalar a skill",
+        "category": "Claude Switcher",
+        "icon": "$(check)"
+      },
+      {
+        "command": "claudeSwitcher.skills.review",
+        "title": "Revisar com o Claude",
+        "category": "Claude Switcher",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "claudeSwitcher.skills.discard",
+        "title": "Descartar o rascunho",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.skills.openDraft",
+        "title": "Abrir o rascunho",
+        "category": "Claude Switcher",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "claudeSwitcher.skills.remove",
+        "title": "Apagar a skill",
+        "category": "Claude Switcher",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeSwitcher.skills.openConversation",
+        "title": "Abrir a conversa",
+        "category": "Claude Switcher"
       }
     ],
     "configuration": {
@@ -871,6 +1088,11 @@
           "minimum": 1,
           "maximum": 720,
           "description": "Por quantos minutos o cofre de credenciais fica destrancado depois da senha mestra. Depois disso ele tranca sozinho, em todas as janelas."
+        },
+        "claudeSwitcher.skills.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Skills: uma vez por semana no máximo, quando houver pelo menos 10 conversas novas, o Claude (Sonnet) lê o que você pediu nas conversas e avisa quando uma tarefa se repete e pode virar skill. Gasta um pouco do limite da conta em uso. Desligado, a análise só roda pelo botão da página Skills."
         }
       }
     }

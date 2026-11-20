@@ -9,6 +9,7 @@ const { Switcher } = require('./core/switcher');
 const { mtime } = require('./core/fsutil');
 const { adviseWithPlan } = require('./core/planner');
 const { Curator } = require('./core/curator');
+const { SkillCurator } = require('./core/skillCurator');
 const { runClaude } = require('./core/claudeCli');
 const { createActions, claudeExecutable } = require('./ui/actions');
 const { createSidebar } = require('./ui/sidebar');
@@ -20,6 +21,7 @@ const { createTopicGuard } = require('./ui/topicGuard');
 const { createSameProject } = require('./ui/sameProject');
 const { createApprovals } = require('./ui/approvalsView');
 const { createMemoriesView } = require('./ui/memoriesView');
+const { createSkillsView } = require('./ui/skillsView');
 const { createCredentialsView } = require('./ui/credentialsView');
 
 const MINUTE = 60 * 1000;
@@ -56,6 +58,7 @@ function activate(context) {
     return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
   };
   app.curator = new Curator({ paths, switcherDir: dir, log, run: app.askClaude });
+  app.skillCurator = new SkillCurator({ paths, switcherDir: dir, log, run: app.askClaude });
   const actions = createActions(app);
   const menu = createMenu(app, actions);
   const sidebar = createSidebar();
@@ -66,6 +69,7 @@ function activate(context) {
   const sameProject = (app.sameProject = createSameProject(app));
   const approvals = (app.approvals = createApprovals(app, sidebar));
   const memoriesView = createMemoriesView(app, sidebar);
+  const skillsView = createSkillsView(app, sidebar);
   const credentialsView = createCredentialsView(app, sidebar);
 
   context.subscriptions.push(
@@ -77,6 +81,7 @@ function activate(context) {
     sameProject,
     approvals,
     memoriesView,
+    skillsView,
     credentialsView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),

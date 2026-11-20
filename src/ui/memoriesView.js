@@ -567,4 +567,4 @@ function summary(text) {
   return clip(plain || '(vazio)', 90);
 }
 
-module.exports = { createMemoriesView };
+module.exports = { createMemoriesView, currentRoot };

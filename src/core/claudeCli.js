@@ -5,10 +5,12 @@
 // saved session, and only project settings (none in `cwd`), so the user's hooks don't fire.
 const { spawn } = require('child_process');
 
-function runClaude({ exe, cwd, prompt, system, schema, model = 'haiku', timeoutMs = 5 * 60 * 1000 }) {
+// `effort` (low…max) bounds how long the model thinks before answering; left out, the CLI's default.
+function runClaude({ exe, cwd, prompt, system, schema, model = 'haiku', effort = null, timeoutMs = 5 * 60 * 1000 }) {
   const args = [
     '-p',
     '--model', model,
+    ...(effort ? ['--effort', effort] : []),
     '--output-format', 'json',
     '--json-schema', JSON.stringify(schema),
     '--system-prompt', system,

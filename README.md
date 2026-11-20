@@ -8,7 +8,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem quatro páginas, uma de cada vez: **Contas**, **Memórias**, **Credenciais** e **Aprovações**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
+- O painel tem cinco páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais** e **Aprovações**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
 - No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -21,7 +21,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
 - Quando uma conta esgotada volta, aparece *"✅ Conta 3 voltou e já está disponível. [Usar Conta 3]"*.
 
-**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Ligar/desligar conversas no mesmo projeto, Ligar/desligar as aprovações, Analisar as memórias de novo, Abrir o CLAUDE.md global.
+**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Ligar/desligar conversas no mesmo projeto, Ligar/desligar as aprovações, Analisar as memórias de novo, Abrir o CLAUDE.md global, Procurar tarefas repetidas para virar skills, Nova skill.
 
 ### Autoswitcher
 
@@ -173,6 +173,37 @@ Memórias Globais                              3 itens
   - as memórias que o Claude salvou neste projeto, separadas em preferências, fatos e referências. Clique para abrir; o 🗑 apaga (com Desfazer).
 - Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/`: as memórias apagadas e as últimas 20 versões do `CLAUDE.md`.
 
+### Skills: o que você pede de novo e de novo
+
+Uma skill é um arquivo `SKILL.md` que ensina um procedimento ao Claude Code: os passos, os comandos e caminhos certos, as conferências e os erros a evitar. O Claude Code lê só a descrição de cada skill e carrega a skill sozinho quando um pedido combina com ela. Sem a skill, ele redescobre o procedimento a cada conversa, e você corrige as mesmas coisas de novo.
+
+A página **Skills** (no menu **…** do painel) acha essas repetições nas suas conversas:
+
+```
+Repetidas nas conversas                       2 para criar
+  ✨ Gerar e instalar a versão                 projeto claude-switcher · 5 conversas
+  ✨ Subir em commits separados                global · 3 conversas
+Skills Globais                                1 skill
+  ＋ Nova skill…
+  graphify                                    usada 12× · última 18/11
+  De plugins e do claude.ai                   33
+Skills Projeto (Rota7/web)                    1 skill
+  ＋ Nova skill do projeto…
+  publicar-pagina                             usada 4× · última 20/11
+```
+
+- **Leitura das conversas:** a extensão lê as conversas que o Claude Code salva em `~/.claude/projects/` e guarda só o que interessa: o que você pediu, o tipo de cada comando que rodou (`plink`, `npm run package`, `git cherry-pick`, sem os argumentos) e as skills usadas. Cada conversa é lida uma vez, e depois só o que cresceu. A primeira leitura leva alguns segundos. Essa parte não gasta tokens.
+- **Análise:** o Claude (modelo Sonnet, pelo `claude -p`) recebe um resumo das conversas dos últimos 120 dias e aponta as tarefas que voltam, mesmo com outras palavras, e que têm um procedimento que se repete. Ficam de fora as preferências de uma linha (essas vão para o `CLAUDE.md`, pela página Memórias), o trabalho que muda a cada vez e o que uma skill existente já cobre. Quando uma skill existe mas você continua corrigindo o procedimento, ele sugere melhorá-la. Cada sugestão diz se é global ou de um projeto, por que vale, os passos e as conversas de onde saiu.
+- **Quando roda:** pelo ⟳ do título, ou sozinha, no máximo uma vez por semana e só quando houver pelo menos 10 conversas novas. Aí chega um aviso com as sugestões novas. Cada análise usa um pouco do limite da conta em uso. Para rodar só pelo botão, desligue `claudeSwitcher.skills.autoAnalyze`.
+- **Criar (✨):** o Claude lê os trechos dessas conversas (o que você pediu, o que ele rodou, o que deu erro e o que você corrigiu) e escreve a `SKILL.md`: os comandos que funcionaram, uma seção de cuidados e uma descrição com as palavras que você usa nos pedidos. O rascunho abre no editor. Revise, edite o que quiser e clique em ✓ **Instalar a skill** no título do editor. Nada é instalado antes disso.
+- **Revisar com o Claude:** o botão no título do rascunho abre uma conversa nova do Claude Code com o pedido de revisão já digitado; é só apertar Enter. Nela o Claude confere no projeto se os comandos e caminhos existem e corrige o rascunho no mesmo arquivo. Quem instala continua sendo você.
+- **Onde fica:** uma skill global vai para `~/.claude/skills/<nome>/SKILL.md` e vale em todos os projetos. Uma de projeto vai para `<projeto>/.claude/skills/<nome>/SKILL.md`. Se já existe uma skill com esse nome, o switcher pergunta antes de substituir. A notificação tem **Desfazer**.
+- **Senhas e tokens:** antes de ir para o Claude, o que parece senha, token ou chave nos trechos vira `[segredo]`. As referências do cofre (`{{credencial.campo}}`) ficam. A skill pronta passa pelo mesmo filtro e, com o cofre de credenciais criado, usa o `segredo` nos comandos que precisam de uma credencial.
+- **Nova skill (＋):** diga do seu jeito o que a skill faz. O Claude escreve usando como exemplo as conversas parecidas.
+- **Ignorar (✕):** a sugestão some, e o Claude é avisado para não sugerir de novo.
+- Cada skill mostra quantas vezes foi usada e quando. Uma skill que nunca é usada pode estar com a descrição vaga. O 🗑 apaga a pasta da skill (com Desfazer). As de plugins e do claude.ai só aparecem na lista.
+- Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/skills/`. O estado da página fica em `~/.claude-switcher/skills.json`, o resumo das conversas em `conversations.json` e os rascunhos em `skill-drafts/`.
+
 ### Credenciais: senhas que o Claude usa sem ver
 
 A página **Credenciais** (no menu **…** do painel) é um cofre criptografado para senhas, chaves e tokens, como os do `server.md`. O Claude usa os valores nos comandos sem nunca vê-los.
@@ -223,6 +254,7 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 | `claudeSwitcher.notifyBurn` | `true` | Avisa quando a conta recomendada tem uso prestes a vencer |
 | `claudeSwitcher.showStatusBar` | `true` | Também mostra a conta em uso na barra de status |
 | `claudeSwitcher.credentials.lockMinutes` | `60` | Minutos que o cofre de credenciais fica destrancado depois da senha mestra |
+| `claudeSwitcher.skills.autoAnalyze` | `true` | Procura sozinha, no máximo uma vez por semana, as tarefas repetidas nas conversas que podem virar skill |
 
 ## Como funciona
 
@@ -254,6 +286,9 @@ src/
     curator.js       página Memórias: analisa, junta, ignora, remove e desfaz
     memories.js      lê as memórias dos projetos, edita o MEMORY.md e monta a análise
     claudeMd.js      o CLAUDE.md global em seções e itens; adiciona e remove regras
+    conversations.js lê as conversas salvas (só o que é novo) em pedidos, comandos e skills usadas; tira os segredos
+    skills.js        as skills que existem, o formato da SKILL.md e o que o Claude recebe para sugerir e escrever uma
+    skillCurator.js  página Skills: analisa, escreve o rascunho, instala, desfaz e apaga
     claudeCli.js     pergunta ao Claude pelo `claude -p`, com resposta em JSON
     vault.js         cofre de credenciais criptografado (AES-256-GCM + scrypt)
     secretBus.js     canal local entre o segredo e as janelas do VS Code
@@ -279,6 +314,7 @@ src/
     sidebar.js       o painel da barra lateral, uma página de cada vez
     accountsView.js  página Contas
     memoriesView.js  página Memórias
+    skillsView.js    página Skills e os botões do rascunho no editor
     credentialsView.js  página Credenciais
     statusBar.js     indicador na barra de status
     menu.js          menu rápido

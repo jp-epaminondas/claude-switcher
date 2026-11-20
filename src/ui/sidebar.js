@@ -1,6 +1,6 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas, Memórias, Credenciais or Aprovações, picked
+// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais or Aprovações, picked
 // from the panel's "…" menu. Each page brings its rows, its description and its badge; only the
 // page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
 // has none. A page can bring its own view instead of rows (Aprovações is a webview): the
@@ -106,6 +106,7 @@ function createSidebar() {
     ...[
       ['Accounts', 'accounts'],
       ['Memories', 'memories'],
+      ['Skills', 'skills'],
       ['Credentials', 'credentials'],
       ['Approvals', 'approvals'],
     ].flatMap(([cmd, name]) => [
