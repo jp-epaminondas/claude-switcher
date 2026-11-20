@@ -3,10 +3,13 @@
 // Claude Code runs this in every conversation, so that two conversations working in the same
 // project at the same time know about each other instead of losing time over changes they
 // did not make. Each conversation keeps a few files in sessions/ (only its own): what it was
-// asked, which files it changed, whether it is working or waiting for the user.
-// - UserPromptSubmit: notes the prompt and tells the model who else is in the project.
-// - PreToolUse (Edit, Write, Bash): warns before it edits a file the other one changed, and
-//   holds back once a git command that would sweep up or throw away the other one's changes.
+// asked, which files it changed, whether it is working or waiting for the user. Being open in
+// the same folder says nothing: two conversations share a project once one has changed files
+// in a repository the other works in (its folder's, or one where it changed files too).
+// - UserPromptSubmit: notes the prompt and tells the model who else has changes in the project.
+// - PreToolUse (Edit, Write, Bash): warns before it edits a file the other one changed, or
+//   first edits in a repository where the other one has changes, and holds back once a git
+//   command that would sweep up or throw away the other one's changes.
 // - PostToolUse (Edit, Write): notes the file it changed.
 // - Stop: waiting for the user. SessionEnd: gone, its files go too.
 //
@@ -121,8 +124,8 @@ class Sessions {
     for (const ext of ['json', 'alive', 'edits', 'idle', 'notes']) this.remove(id, ext);
   }
 
-  // The other conversations in the same project that still matter.
-  peers(me, rootKey, now = Date.now()) {
+  // The other conversations that still matter, wherever they work.
+  peers(me, now = Date.now()) {
     let names = [];
     try {
       names = fs.readdirSync(this.dir);
@@ -138,7 +141,7 @@ class Sessions {
         continue;
       }
       const meta = this.meta(id);
-      if (!meta || meta.rootKey !== rootKey || now - seen > RELEVANT_MS) continue;
+      if (!meta || now - seen > RELEVANT_MS) continue;
       const idle = this.idleSince(id);
       const working = idle == null && now - seen < WORKING_MS;
       out.push({ id, meta, seen, working, idleSince: idle ?? seen, edits: this.edits(id) });
@@ -183,11 +186,37 @@ function gitStatus(root) {
   return { dirty, staged };
 }
 
+// The repository each file is in and the git status of each repository, looked up once per run.
+function lookup() {
+  const repos = new Map();
+  const statuses = new Map();
+  const repoOf = (file) => {
+    const dir = path.dirname(path.resolve(file));
+    if (!repos.has(dir)) repos.set(dir, projectRoot(dir));
+    return repos.get(dir);
+  };
+  const statusOf = (root) => {
+    const key = keyOf(root);
+    if (!statuses.has(key)) statuses.set(key, gitStatus(root));
+    return statuses.get(key);
+  };
+  return { repoOf, statusOf };
+}
+
+// The repositories a conversation works in: its folder's and the ones of the files it changed.
+const reposOf = (meta, mine, look) => new Set([meta.rootKey, ...[...mine.values()].map(({ file }) => keyOf(look.repoOf(file)))]);
+
+// Whether a conversation changed anything in this repository.
+const changedIn = (peer, repoKey, look) => [...peer.edits.values()].some(({ file }) => keyOf(look.repoOf(file)) === repoKey);
+
 const ago = (ms) => {
   const m = Math.max(1, Math.round(ms / MINUTE));
   return m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
 };
-const rel = (root, file) => path.relative(root, file).replace(/\\/g, '/') || file;
+const rel = (root, file) => {
+  const r = path.relative(root, file);
+  return (!r || r.startsWith('..') || path.isAbsolute(r) ? file : r).replace(/\\/g, '/');
+};
 const listFiles = (root, files) => {
   const names = files.map((f) => rel(root, f));
   return names.length > FILES_SHOWN ? `${names.slice(0, FILES_SHOWN).join(', ')} (+${names.length - FILES_SHOWN})` : names.join(', ');
@@ -205,31 +234,39 @@ function theirFiles(peer, mine) {
   return [...peer.edits.entries()].filter(([key, e]) => !(mine.get(key)?.at > e.at)).map(([key, e]) => ({ key, file: e.file, at: e.at, peer }));
 }
 
-// A peer's files that still have changes, newest first (all of them outside git).
-function pendingFiles(peer, status, mine) {
+// A peer's files in these repositories that still have changes, newest first (all of them
+// outside git).
+function pendingFiles(peer, mine, repos, look) {
   return theirFiles(peer, mine)
-    .filter(({ key }) => !status || status.dirty.has(key))
+    .filter(({ key, file }) => {
+      const repo = look.repoOf(file);
+      if (!repos.has(keyOf(repo))) return false;
+      const status = look.statusOf(repo);
+      return !status || status.dirty.has(key);
+    })
     .sort((a, b) => b.at - a.at)
     .map((f) => f.file);
 }
 
-function describe(root, peer, status, mine, now) {
+// The peers with changes still pending in these repositories, each with its files.
+const withChanges = (peers, mine, repos, look) => peers.map((p) => ({ ...p, files: pendingFiles(p, mine, repos, look) })).filter((p) => p.files.length);
+
+function describe(root, peer, now, inGit) {
   const state = peer.working ? 'trabalhando agora' : `parada ${ago(now - peer.idleSince)}, esperando o usuário`;
   const task = peer.meta.task ? `, pedido: "${peer.meta.task}"` : '';
-  const files = pendingFiles(peer, status, mine);
-  const changed = files.length
-    ? `\n  Arquivos que ela mudou${status ? ' e ainda não foram para commit' : ''}: ${listFiles(root, files)}`
-    : '\n  Ela ainda não tem mudanças fora de commit.';
   const name = nameOf(peer);
-  return `- ${name[0].toUpperCase()}${name.slice(1)} (${state}${task}).${changed}`;
+  return `- ${name[0].toUpperCase()}${name.slice(1)} (${state}${task}).\n  Arquivos que ela mudou${inGit ? ' e ainda não foram para commit' : ''}: ${listFiles(root, peer.files)}`;
 }
 
-function briefing(root, peers, status, mine, now, full) {
+function briefing(root, peers, look, now, full) {
   const one = peers.length === 1;
-  const list = peers.map((p) => describe(root, p, status, mine, now)).join('\n');
-  if (!full) return `[Claude Switcher] ${one ? 'A outra conversa' : 'As outras conversas'} do Claude Code neste projeto, agora:\n${list}\nAs regras de antes continuam valendo.`;
+  const inGit = !!look.statusOf(root);
+  const list = peers.map((p) => describe(root, p, now, inGit)).join('\n');
+  if (!full) return `[Claude Switcher] ${one ? 'A outra conversa' : 'As outras conversas'} do Claude Code com mudanças no projeto em que você trabalha, agora:\n${list}\nAs regras de antes continuam valendo.`;
+  const where = [...new Map(peers.flatMap((p) => p.files).map((f) => [keyOf(look.repoOf(f)), look.repoOf(f)])).values()].join(', ');
+  const pending = inGit ? ` e ainda não ${one ? 'fez' : 'fizeram'} commit deles` : '';
   return [
-    `[Claude Switcher] ${one ? 'Outra conversa' : `Outras ${peers.length} conversas`} do Claude Code ${one ? 'está' : 'estão'} trabalhando neste mesmo projeto (${root}) ao mesmo tempo que você, a pedido do mesmo usuário. Isso é esperado, não é um problema para investigar.`,
+    `[Claude Switcher] ${one ? 'Outra conversa' : `Outras ${peers.length} conversas`} do Claude Code, a pedido do mesmo usuário, ${one ? 'mudou' : 'mudaram'} arquivos do mesmo projeto em que você trabalha (${where})${pending}. Isso é esperado, não é um problema para investigar.`,
     list,
     'Para uma não atrapalhar a outra:',
     `- Mudanças que você não fez (no git status, no git diff, num arquivo que mudou depois que você leu, em testes ou no build) provavelmente são ${one ? 'dela' : 'delas'}. Não reverta, não formate e não tente consertar: siga com a sua tarefa e, se elas te impedirem, diga ao usuário.`,
@@ -371,16 +408,23 @@ const INSTEAD = {
   branch: 'Continue no branch atual, ou peça ao usuário para combinar com a outra conversa.',
 };
 
-// Why to hold a shell command back ({ kind, reason }), or null to let it run.
-function holdBack(command, cwd, root, peers, status, mine) {
-  for (const risk of gitCommands(command, cwd).map((c) => gitRisk(c, root)).filter(Boolean)) {
+// Why to hold a shell command back ({ kind, reason }), or null to let it run. Each git command
+// counts in the repository it runs in, and only the peers that changed files there matter.
+function holdBack(command, cwd, peers, mine, look) {
+  for (const cmd of gitCommands(command, cwd)) {
+    const root = projectRoot(cmd.cwd);
+    const risk = gitRisk(cmd, root);
+    if (!risk) continue;
+    const rootKey = keyOf(root);
     let who;
     let files = [];
     if (risk.kind === 'branch') {
-      who = peers.filter((p) => p.working);
+      who = peers.filter((p) => p.working && changedIn(p, rootKey, look));
     } else {
+      const status = look.statusOf(root);
       const reached = peers
         .flatMap((p) => theirFiles(p, mine))
+        .filter(({ file }) => keyOf(look.repoOf(file)) === rootKey)
         .filter(({ key }) => (risk.kind === 'commit' ? !!status && status.staged.has(key) : !status || status.dirty.has(key)) && covers(risk.scope, key));
       who = [...new Set(reached.map((f) => f.peer))];
       files = [...new Set(reached.map((f) => f.file))];
@@ -399,7 +443,7 @@ const short = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…`
 function heads(peers) {
   const one = peers.length === 1;
   const task = one && peers[0].meta.task ? ` (pedido: "${short(peers[0].meta.task, 80)}")` : '';
-  return `Claude Switcher: ${one ? 'outra conversa está' : `outras ${peers.length} conversas estão`} trabalhando neste projeto${task}. Avisei o Claude para não atrapalhar.`;
+  return `Claude Switcher: ${one ? 'outra conversa tem' : `outras ${peers.length} conversas têm`} mudanças neste projeto${task}. Avisei o Claude para não atrapalhar.`;
 }
 
 // --- the hook ---
@@ -430,29 +474,40 @@ function run(hook, sessions, now = Date.now()) {
     const root = projectRoot(hook.cwd);
     meta = { id, root, rootKey: keyOf(root), startedAt: now, task: null, told: null };
   }
-  const { root, rootKey } = meta;
+  const { root } = meta;
 
   if (event === 'UserPromptSubmit') {
     sessions.remove(id, 'idle');
     meta.task = taskOf(hook.prompt) || meta.task;
-    const peers = sessions.peers(id, rootKey, now);
+    const look = lookup();
+    const mine = sessions.edits(id);
+    const alive = sessions.peers(id, now);
+    const isAlive = (peerId) => alive.some((p) => p.id === peerId);
+    const peers = withChanges(alive, mine, reposOf(meta, mine, look), look);
     const told = meta.told || {};
+    // The user hears about each conversation once, not every time it commits and changes again.
+    const announced = (meta.announced || []).filter(isAlive);
     let text = null;
     let shown = null;
     if (peers.length) {
-      const status = gitStatus(root);
-      const mine = sessions.edits(id);
       const ids = peers.map((p) => p.id).sort().join(',');
       const full = told.ids !== ids || now - (told.fullAt || 0) > BRIEF_AGAIN_MS;
-      const sig = peers.map((p) => [p.id, p.working, p.meta.task, pendingFiles(p, status, mine).join('|')].join(':')).join(',');
-      if (full || sig !== told.sig) text = briefing(root, peers, status, mine, now, full);
-      if (told.ids !== ids) shown = heads(peers);
+      const sig = peers.map((p) => [p.id, p.working, p.meta.task, p.files.join('|')].join(':')).join(',');
+      if (full || sig !== told.sig) text = briefing(root, peers, look, now, full);
+      const fresh = peers.filter((p) => !announced.includes(p.id));
+      if (fresh.length) shown = heads(fresh);
+      announced.push(...fresh.map((p) => p.id));
       meta.told = { ids, sig, fullAt: full ? now : told.fullAt };
     } else if (told.ids) {
-      text = '[Claude Switcher] A outra conversa que trabalhava neste projeto terminou ou parou faz tempo. Agora só você está mexendo nele.';
-      shown = 'Claude Switcher: a outra conversa deste projeto terminou. Agora só esta está mexendo nele.';
+      if (told.ids.split(',').some(isAlive)) {
+        text = '[Claude Switcher] A outra conversa não tem mais mudanças fora de commit no projeto em que você trabalha. Se ela mudar algo de novo, você fica sabendo.';
+      } else {
+        text = '[Claude Switcher] A outra conversa que mexia neste projeto terminou ou parou faz tempo. Agora só você está mexendo nele.';
+        shown = 'Claude Switcher: a outra conversa deste projeto terminou. Agora só esta está mexendo nele.';
+      }
       meta.told = null;
     }
+    meta.announced = announced;
     sessions.write(id, 'json', JSON.stringify(meta));
     return text && { ...(shown && { systemMessage: shown }), hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } };
   }
@@ -467,32 +522,39 @@ function run(hook, sessions, now = Date.now()) {
   }
 
   if (event !== 'PreToolUse') return null;
-  const peers = sessions.peers(id, rootKey, now);
+  const peers = sessions.peers(id, now);
   if (!peers.length) return null;
   const mine = sessions.edits(id);
+  const look = lookup();
 
   if (EDIT_TOOLS.has(hook.tool_name)) {
     const file = editedFile(hook);
     if (!file) return null;
+    const said = [];
     const key = keyOf(file);
     const theirs = peers.flatMap((p) => theirFiles(p, mine)).find((f) => f.key === key);
-    if (!theirs) return null;
-    const note = `${key}@${theirs.at}`;
-    if (sessions.noted(id, 'file', note)) return null;
-    sessions.append(id, 'notes', ['file', note, now]);
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        additionalContext: `[Claude Switcher] ${rel(root, file)} também foi mudado ${ago(now - theirs.at)} por ${nameOf(theirs.peer)}, que trabalha neste projeto ao mesmo tempo que você${taskNote(theirs.peer)}. Se o arquivo não estiver como você leu, é por isso: releia e aplique só a sua mudança, sem desfazer a dela.`,
-      },
-    };
+    const note = theirs && `${key}@${theirs.at}`;
+    if (theirs && !sessions.noted(id, 'file', note)) {
+      sessions.append(id, 'notes', ['file', note, now]);
+      said.push(`[Claude Switcher] ${rel(root, file)} também foi mudado ${ago(now - theirs.at)} por ${nameOf(theirs.peer)}, que trabalha neste projeto ao mesmo tempo que você${taskNote(theirs.peer)}. Se o arquivo não estiver como você leu, é por isso: releia e aplique só a sua mudança, sem desfazer a dela.`);
+    }
+    // The first change in a repository outside the conversation's own: who has changes there.
+    const repo = look.repoOf(file);
+    const repoKey = keyOf(repo);
+    if (!reposOf(meta, mine, look).has(repoKey) && !sessions.noted(id, 'repo', repoKey)) {
+      const there = withChanges(peers, mine, new Set([repoKey]), look);
+      if (there.length) {
+        sessions.append(id, 'notes', ['repo', repoKey, now]);
+        said.push(briefing(repo, there, look, now, true));
+      }
+    }
+    return said.length ? { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: said.join('\n') } } : null;
   }
 
   if (hook.tool_name === 'Bash') {
     const command = hook.tool_input && hook.tool_input.command;
     if (typeof command !== 'string' || !/\bgit\b/.test(command)) return null;
-    const status = gitStatus(root);
-    const held = holdBack(command, hook.cwd || root, root, peers, status, mine);
+    const held = holdBack(command, hook.cwd || root, peers, mine, look);
     if (!held) return null;
     const key = command.trim().replace(/\s+/g, ' ');
     if (sessions.noted(id, 'cmd', key, RETRY_MS, now)) return null; // sent again: the user wants it
@@ -521,4 +583,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { run, Sessions, gitCommands, gitRisk, holdBack, taskOf, projectRoot, keyOf };
+module.exports = { run, Sessions, gitCommands, gitRisk, holdBack, taskOf, projectRoot, keyOf, lookup, changedIn };

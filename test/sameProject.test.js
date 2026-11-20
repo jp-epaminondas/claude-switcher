@@ -43,15 +43,15 @@ function two() {
 const context = (out) => out && out.hookSpecificOutput.additionalContext;
 const denied = (out) => out && out.hookSpecificOutput.permissionDecision === 'deny' && out.hookSpecificOutput.permissionDecisionReason;
 
-test('tells a conversation what the other one in the project is doing, once per change', () => {
+test('tells a conversation what the other one changed in the project, once per change', () => {
   const { say, edit } = two();
   assert.equal(say('A', 'UserPromptSubmit', { prompt: 'arruma o loop do envio de mensagens' }), null, 'alone in the project');
   edit('A', 'src/a.js');
 
   const firstOut = say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' });
-  assert.equal(firstOut.systemMessage, 'Claude Switcher: outra conversa está trabalhando neste projeto (pedido: "arruma o loop do envio de mensagens"). Avisei o Claude para não atrapalhar.');
+  assert.equal(firstOut.systemMessage, 'Claude Switcher: outra conversa tem mudanças neste projeto (pedido: "arruma o loop do envio de mensagens"). Avisei o Claude para não atrapalhar.');
   const first = context(firstOut);
-  assert.match(first, /Outra conversa do Claude Code está trabalhando neste mesmo projeto/);
+  assert.match(first, /Outra conversa do Claude Code, a pedido do mesmo usuário, mudou arquivos do mesmo projeto em que você trabalha \(.+proj\) e ainda não fez commit deles/);
   assert.match(first, /trabalhando agora, pedido: "arruma o loop do envio de mensagens"/);
   assert.match(first, /ainda não foram para commit: src\/a\.js/);
   assert.match(first, /git add -A/);
@@ -67,7 +67,9 @@ test('tells a conversation what the other one in the project is doing, once per 
   assert.match(update, /src\/b\.js, src\/a\.js/);
   assert.doesNotMatch(update, /git add -A/, 'the rules only once');
 
-  // And the other way round: A hears about B.
+  // And the other way round: A hears about B once B changes something.
+  assert.equal(say('A', 'UserPromptSubmit', { prompt: 'agora roda os testes do envio' }), null, 'B changed nothing yet');
+  edit('B', 'README.md');
   assert.match(context(say('A', 'UserPromptSubmit', { prompt: 'agora roda os testes do envio' })), /pedido: "cria a tela de login com 2fa"/);
 
   say('A', 'SessionEnd');
@@ -135,16 +137,56 @@ test('a commit only waits when the index already holds the other one\'s files', 
   assert.equal(bash('B', 'git add -A'), null, 'committed: nothing of A left');
 });
 
-test('leaves out conversations in other projects and the ones long quiet', () => {
-  const { t, say, edit, sessions } = two();
-  const other = path.join(t.root, 'outro');
-  fs.mkdirSync(path.join(other, 'sub'), { recursive: true });
-  run({ session_id: 'C', cwd: path.join(other, 'sub'), hook_event_name: 'UserPromptSubmit', prompt: 'mexe no outro projeto inteiro' }, sessions);
+test('the same folder is not the same project: only the files changed count', () => {
+  const { t, dir, say, sessions } = two();
+  const other = project(path.join(t.root, 'outro'));
+  say('A', 'UserPromptSubmit', { prompt: 'só uma pergunta sobre o envio de mensagens' });
+  assert.equal(say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' }), null, 'A changed nothing');
+
+  // A, open in the same folder, changes a file of another repository.
+  fs.writeFileSync(path.join(other, 'src/a.js'), 'A\n');
+  say('A', 'PostToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(other, 'src/a.js') } });
+  assert.equal(say('B', 'UserPromptSubmit', { prompt: 'continua a tela de login' }), null, 'A works elsewhere');
+  assert.equal(say('B', 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'git add -A' } }), null);
+  assert.equal(say('B', 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'git switch -c outra' } }), null, 'A works in another repository');
+  assert.match(denied(say('B', 'PreToolUse', { tool_name: 'Bash', tool_input: { command: `git -C "${other}" add -A` } })), /Arquivos dela: src\/a\.js/, 'but not in that one');
+
+  // C, open in a window of that repository, sees A's change.
+  const c = (event, extra) => run({ session_id: 'C', cwd: other, hook_event_name: event, ...extra }, sessions);
+  assert.match(context(c('UserPromptSubmit', { prompt: 'arruma o build do outro projeto' })), /src\/a\.js/);
+  assert.match(denied(c('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'git add .' } })), /Arquivos dela: src\/a\.js/);
+
+  // B hears about A when it first edits there.
+  const preB = () => say('B', 'PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(other, 'README.md') } });
+  assert.match(context(preB()), /mudou arquivos do mesmo projeto em que você trabalha \(.+outro.proj\)/);
+  assert.equal(preB(), null, 'once');
+  assert.equal(say('B', 'PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(dir, 'src/b.js') } }), null);
+});
+
+test('a commit takes the other one out, and the user hears about it once', () => {
+  const { dir, say, edit } = two();
+  say('A', 'UserPromptSubmit', { prompt: 'arruma o loop do envio de mensagens' });
+  edit('A', 'src/a.js');
+  assert.ok(say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' }).systemMessage);
+  execFileSync('git', ['-C', dir, 'commit', '-qam', 'A'], { stdio: 'ignore' });
+
+  const committed = say('B', 'UserPromptSubmit', { prompt: 'continua' });
+  assert.match(context(committed), /não tem mais mudanças fora de commit/);
+  assert.equal(committed.systemMessage, undefined, 'still open: nothing for the user');
+  edit('A', 'src/b.js');
+  const again = say('B', 'UserPromptSubmit', { prompt: 'continua' });
+  assert.match(context(again), /src\/b\.js/);
+  assert.doesNotMatch(context(again), /src\/a\.js/, 'committed');
+  assert.equal(again.systemMessage, undefined, 'the user already knows about A');
+});
+
+test('leaves out the ones long quiet', () => {
+  const { say, edit, sessions } = two();
   say('A', 'UserPromptSubmit', { prompt: 'arruma o loop do envio de mensagens' });
   edit('A', 'src/a.js');
   assert.ok(context(say('B', 'UserPromptSubmit', { prompt: 'cria a tela de login com 2fa' })));
-  assert.equal(sessions.peers('B', sessions.meta('B').rootKey).length, 1, 'C is elsewhere');
-  assert.equal(sessions.peers('B', sessions.meta('B').rootKey, Date.now() + 4 * 60 * MINUTE).length, 0, 'quiet for hours');
+  assert.equal(sessions.peers('B').length, 1);
+  assert.equal(sessions.peers('B', Date.now() + 4 * 60 * MINUTE).length, 0, 'quiet for hours');
 });
 
 test('reads git commands out of a shell line, not out of quotes or a heredoc', () => {

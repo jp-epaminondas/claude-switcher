@@ -7,7 +7,7 @@
 const path = require('path');
 const vscode = require('vscode');
 const { syncPeerHook, findNode, settingsFile } = require('../core/claudeHook');
-const { Sessions, projectRoot, keyOf } = require('../hook/peer-hook');
+const { Sessions, projectRoot, keyOf, lookup, changedIn } = require('../hook/peer-hook');
 
 function createSameProject(app) {
   const { paths, log } = app;
@@ -40,12 +40,14 @@ function createSameProject(app) {
     );
   }
 
-  // How many conversations are in the project open in this window right now.
+  // How many conversations changed files in the project open in this window, lately.
   function countHere() {
     const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!folder) return 0;
     try {
-      return sessions.peers(null, keyOf(projectRoot(folder))).length;
+      const repo = keyOf(projectRoot(folder));
+      const look = lookup();
+      return sessions.peers(null).filter((p) => changedIn(p, repo, look)).length;
     } catch {
       return 0;
     }
