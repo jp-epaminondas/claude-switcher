@@ -70,15 +70,34 @@ function syncApprovalHook(paths, switcherDir, { enabled, nodePath = null }) {
   }));
 }
 
-// The features rewrite the same settings.json, so one write at a time.
-let writing = Promise.resolve();
-function syncScript(...args) {
-  const run = writing.then(() => syncScriptNow(...args));
-  writing = run.catch(() => {});
-  return run;
+function syncScript(paths, switcherDir, scriptName, { enabled, nodePath }, entries) {
+  return updateSettings(paths, (settings) => {
+    const script = path.join(switcherDir, scriptName);
+    if (enabled) {
+      if (!nodePath) throw new Error('Node.js não encontrado no PATH');
+      copyIfChanged(path.join(__dirname, '..', 'hook', scriptName), script);
+    }
+
+    const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+    const ours = entries(nodePath, script);
+    for (const event of Object.keys(ours)) {
+      const groups = [];
+      for (const g of Array.isArray(hooks[event]) ? hooks[event] : []) {
+        const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h, scriptName)) : null;
+        if (kept && !kept.length && g.hooks.length) continue; // it held only ours
+        groups.push(kept ? { ...g, hooks: kept } : g);
+      }
+      if (enabled) groups.push(ours[event]);
+      if (groups.length) hooks[event] = groups;
+      else delete hooks[event];
+    }
+    if (Object.keys(hooks).length) settings.hooks = hooks;
+    else delete settings.hooks;
+  });
 }
 
-async function syncScriptNow(paths, switcherDir, scriptName, { enabled, nodePath }, entries) {
+// Claude Code's user settings as an object ({} when the file doesn't exist yet), and its text.
+function readSettings(paths) {
   const file = settingsFile(paths);
   let text = '';
   try {
@@ -86,40 +105,28 @@ async function syncScriptNow(paths, switcherDir, scriptName, { enabled, nodePath
   } catch (e) {
     if (e.code !== 'ENOENT') throw e;
   }
-  let settings = {};
-  if (text.trim()) {
-    try {
-      settings = JSON.parse(text.replace(/^﻿/, ''));
-    } catch (e) {
-      throw new Error(`${file} não é um JSON válido (${e.message})`);
-    }
+  if (!text.trim()) return { settings: {}, text };
+  try {
+    return { settings: JSON.parse(text.replace(/^﻿/, '')), text };
+  } catch (e) {
+    throw new Error(`${file} não é um JSON válido (${e.message})`);
   }
-  const before = JSON.stringify(settings);
-  const script = path.join(switcherDir, scriptName);
-  if (enabled) {
-    if (!nodePath) throw new Error('Node.js não encontrado no PATH');
-    copyIfChanged(path.join(__dirname, '..', 'hook', scriptName), script);
-  }
+}
 
-  const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
-  const ours = entries(nodePath, script);
-  for (const event of Object.keys(ours)) {
-    const groups = [];
-    for (const g of Array.isArray(hooks[event]) ? hooks[event] : []) {
-      const kept = g && Array.isArray(g.hooks) ? g.hooks.filter((h) => !isOurs(h, scriptName)) : null;
-      if (kept && !kept.length && g.hooks.length) continue; // it held only ours
-      groups.push(kept ? { ...g, hooks: kept } : g);
-    }
-    if (enabled) groups.push(ours[event]);
-    if (groups.length) hooks[event] = groups;
-    else delete hooks[event];
-  }
-  if (Object.keys(hooks).length) settings.hooks = hooks;
-  else delete settings.hooks;
-
-  if (JSON.stringify(settings) === before) return false;
-  await writeFileAtomic(file, JSON.stringify(settings, null, 2) + (text && !text.endsWith('\n') ? '' : '\n'));
-  return true;
+// The features rewrite the same settings.json, so one write at a time. `change` edits the
+// settings in place; the file is written only when that changed something. Returns true then.
+let writing = Promise.resolve();
+function updateSettings(paths, change) {
+  const run = writing.then(async () => {
+    const { settings, text } = readSettings(paths);
+    const before = JSON.stringify(settings);
+    change(settings);
+    if (JSON.stringify(settings) === before) return false;
+    await writeFileAtomic(settingsFile(paths), JSON.stringify(settings, null, 2) + (text && !text.endsWith('\n') ? '' : '\n'));
+    return true;
+  });
+  writing = run.catch(() => {});
+  return run;
 }
 
 function copyIfChanged(from, to) {
@@ -131,4 +138,4 @@ function copyIfChanged(from, to) {
   fs.writeFileSync(to, text, 'utf8');
 }
 
-module.exports = { syncHook, syncTopicHook, syncPeerHook, syncApprovalHook, findNode, settingsFile, copyIfChanged };
+module.exports = { syncHook, syncTopicHook, syncPeerHook, syncApprovalHook, findNode, settingsFile, readSettings, updateSettings, copyIfChanged };

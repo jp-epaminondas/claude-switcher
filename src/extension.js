@@ -23,6 +23,7 @@ const { createApprovals } = require('./ui/approvalsView');
 const { createMemoriesView } = require('./ui/memoriesView');
 const { createSkillsView } = require('./ui/skillsView');
 const { createCredentialsView } = require('./ui/credentialsView');
+const { createLocksView } = require('./ui/locksView');
 
 const MINUTE = 60 * 1000;
 
@@ -71,6 +72,7 @@ function activate(context) {
   const memoriesView = createMemoriesView(app, sidebar);
   const skillsView = createSkillsView(app, sidebar);
   const credentialsView = createCredentialsView(app, sidebar);
+  const locksView = createLocksView(app, sidebar);
 
   context.subscriptions.push(
     output,
@@ -83,6 +85,7 @@ function activate(context) {
     memoriesView,
     skillsView,
     credentialsView,
+    locksView,
     vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
     vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),
     vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),

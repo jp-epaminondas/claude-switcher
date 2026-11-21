@@ -106,6 +106,16 @@
           "group": "0_pages@5"
         },
         {
+          "command": "claudeSwitcher.showLocks",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != locks",
+          "group": "0_pages@6"
+        },
+        {
+          "command": "claudeSwitcher.showLocksCurrent",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == locks",
+          "group": "0_pages@6"
+        },
+        {
           "command": "claudeSwitcher.showAccounts",
           "when": "view == claudeSwitcher.approvals",
           "group": "0_pages@1"
@@ -129,6 +139,11 @@
           "command": "claudeSwitcher.showApprovalsCurrent",
           "when": "view == claudeSwitcher.approvals",
           "group": "0_pages@5"
+        },
+        {
+          "command": "claudeSwitcher.showLocks",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@6"
         },
         {
           "command": "claudeSwitcher.addAccount",
@@ -570,6 +585,10 @@
           "when": "false"
         },
         {
+          "command": "claudeSwitcher.showLocksCurrent",
+          "when": "false"
+        },
+        {
           "command": "claudeSwitcher.skills.create",
           "when": "false"
         },
@@ -774,6 +793,16 @@
       {
         "command": "claudeSwitcher.showApprovalsCurrent",
         "title": "✓ Aprovações",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showLocks",
+        "title": "Travas",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showLocksCurrent",
+        "title": "✓ Travas",
         "category": "Claude Switcher"
       },
       {

@@ -1,6 +1,6 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais or Aprovações, picked
+// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais, Aprovações or Travas, picked
 // from the panel's "…" menu. Each page brings its rows, its description and its badge; only the
 // page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
 // has none. A page can bring its own view instead of rows (Aprovações is a webview): the
@@ -64,14 +64,16 @@ function createSidebar() {
   }
 
   // Registers a page. `getChildren` builds its rows; `onShow` runs whenever it comes on screen;
-  // `collapseOnShow` makes every row start collapsed each time; `badgeAlways` shows its badge
-  // on other pages too; `viewId` is the page's own view, shown in place of the tree.
-  function page(name, title, { getChildren = () => [], onShow = () => {}, collapseOnShow = false, badgeAlways = false, viewId = VIEW }) {
+  // `onCheck` gets the [row, state] pairs whose checkbox was clicked; `collapseOnShow` makes
+  // every row start collapsed each time; `badgeAlways` shows its badge on other pages too;
+  // `viewId` is the page's own view, shown in place of the tree.
+  function page(name, title, { getChildren = () => [], onShow = () => {}, onCheck = () => {}, collapseOnShow = false, badgeAlways = false, viewId = VIEW }) {
     const p = {
       name,
       title,
       getChildren,
       onShow,
+      onCheck,
       collapseOnShow,
       badgeAlways,
       viewId,
@@ -102,6 +104,7 @@ function createSidebar() {
     view,
     changed,
     view.onDidChangeVisibility((e) => e.visible && current && shown(current)),
+    view.onDidChangeCheckboxState((e) => current && current.onCheck(e.items)),
     // Each page twice: plain, and with ✓ for the "…" menu while it is the page on screen.
     ...[
       ['Accounts', 'accounts'],
@@ -109,6 +112,7 @@ function createSidebar() {
       ['Skills', 'skills'],
       ['Credentials', 'credentials'],
       ['Approvals', 'approvals'],
+      ['Locks', 'locks'],
     ].flatMap(([cmd, name]) => [
       vscode.commands.registerCommand(`claudeSwitcher.show${cmd}`, () => focus(name)),
       vscode.commands.registerCommand(`claudeSwitcher.show${cmd}Current`, () => focus(name)),

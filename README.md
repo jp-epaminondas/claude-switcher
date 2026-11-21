@@ -8,7 +8,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem cinco páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais** e **Aprovações**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
+- O painel tem seis páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais**, **Aprovações** e **Travas**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
 - No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -87,6 +87,22 @@ Com várias conversas do Claude Code abertas, em várias abas e janelas, cada pe
 - Só vale para as conversas da extensão do Claude Code no VS Code, onde o diálogo aparece junto. No `claude` do terminal o diálogo só aparece depois do hook, então lá ele não faz nada.
 
 Ao ligar, a extensão instala um hook `PermissionRequest` em `~/.claude/settings.json` e o remove ao desligar. O hook deixa o pedido em `~/.claude-switcher/approvals/` e espera a resposta por até 1 h, só enquanto alguma janela do VS Code com o switcher estiver aberta. Liga e desliga pelo menu da barra de status ou pelo comando "Ligar/desligar as aprovações".
+
+### Travas: o que o modo automático pode fazer
+
+No modo automático, o Claude Code segura algumas ações até você pedir com todas as letras na mensagem. Um deploy em produção, por exemplo, só passa se você nomear o servidor. Na página **Travas** (menu **…** do painel), cada uma dessas ações se libera de uma vez, para todas as conversas, e trava de novo com um clique:
+
+- **Deploy em produção:** o deploy e as migrations do banco de produção, junto com os comandos por ssh ou plink que fazem o deploy (git pull, cópia de arquivos, dependências, cache, reiniciar o serviço).
+- **Ler o servidor de produção:** logs, status, crontab, arquivos de código e consultas só de leitura no banco, por ssh ou plink.
+- **Mudar o servidor de produção:** comandos por ssh ou plink que mudam arquivos, crontab, configuração e serviços.
+- **Git destrutivo:** `git push --force`, apagar branches e tags remotas e reescrever o histórico já enviado, no repositório da conversa.
+
+Como funciona:
+- Todas começam **travadas**, que é o padrão do Claude Code. Para liberar, marque a caixa; o switcher pergunta antes. Para travar de novo, desmarque, sem pergunta.
+- **Só o modo automático muda.** Nos modos editar, plano e normal, o Claude continua pedindo aprovação como antes.
+- Algumas ações continuam travadas mesmo assim: apagar dados ou pastas de produção, abrir sessão interativa ou túnel no servidor, mostrar senhas e segredos e mandar dados para fora.
+- Liberar põe uma exceção em `autoMode.allow` no `~/.claude/settings.json`, depois das regras que o Claude Code já traz (`"$defaults"`). Travar tira a exceção, e o resto do arquivo fica como estava. Ao passar o mouse na linha, aparece o texto exato. O estado fica só nesse arquivo, então todas as janelas mostram o mesmo, e as conversas abertas passam a valer na próxima ação. Para conferir: `claude auto-mode config`.
+- O Claude não se libera sozinho: no modo automático, mudar as próprias permissões sem você pedir é uma das ações seguradas.
 
 ### Qual conta usar (⭐ e 🔥)
 
@@ -296,7 +312,8 @@ src/
     usage.js         leitura do /api/oauth/usage e formatação de horários
     api.js           chamadas à API (perfil, uso, renovação de token)
     claudeFiles.js   leitura e escrita dos arquivos do Claude Code
-    claudeHook.js    instala e remove os hooks do autoswitcher, do aviso de assunto novo, das conversas no mesmo projeto e das aprovações no settings.json do Claude Code
+    claudeHook.js    instala e remove os hooks do autoswitcher, do aviso de assunto novo, das conversas no mesmo projeto e das aprovações no settings.json do Claude Code; uma escrita de cada vez nesse arquivo
+    locks.js         página Travas: as exceções do modo automático em autoMode.allow, liberadas e travadas de novo
     limitQueue.js    fila de pedidos entre um hook e a extensão (~/.claude-switcher/limits/ e topics/)
     approvals.js     aprovações: os pedidos de permissão em ~/.claude-switcher/approvals/, as janelas abertas e como cada pedido aparece
     topic.js         aviso de assunto novo: lê o fim da conversa e monta a pergunta ao Haiku
@@ -316,6 +333,7 @@ src/
     memoriesView.js  página Memórias
     skillsView.js    página Skills e os botões do rascunho no editor
     credentialsView.js  página Credenciais
+    locksView.js     página Travas: uma caixa por trava, com a pergunta antes de liberar
     statusBar.js     indicador na barra de status
     menu.js          menu rápido
     actions.js       trocar, adicionar, renomear, remover e as notificações
