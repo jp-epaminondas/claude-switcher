@@ -187,6 +187,7 @@ Memórias Globais                              3 itens
   - o `CLAUDE.md` do projeto (`CLAUDE.md` na raiz e `.claude/CLAUDE.md`), em seções e itens com 🗑;
   - **Nova instrução do projeto…**, igual à global, mas grava no arquivo do projeto e avisa quando o pedido parece valer para todos os projetos;
   - as memórias que o Claude salvou neste projeto, separadas em preferências, fatos e referências. Clique para abrir; o 🗑 apaga (com Desfazer).
+  - **por subprojeto**, quando a pasta reúne vários repositórios (como `Rota7/web`, com `WA/`, `Automacao-Smart/`, `Etapas-Logistica/`…, cada um com seu `.git`). O Claude Code guarda as memórias de todos eles numa pasta só, porque a conversa começa na raiz. A linha **Separar por subprojeto** pede ao Claude (Haiku) que diga de qual subprojeto cada memória trata, pelo nome, pela descrição e pelo começo do README de cada subprojeto, ou se ela vale para todos (**Geral**). Dentro de cada subprojeto continuam as preferências, fatos e referências. A resposta fica guardada: depois só as memórias novas vão para o Claude, na linha **Separar N memórias novas**. O ⟳ ao lado de "Memórias do projeto" separa tudo de novo. Para corrigir uma, clique com o botão direito → **Mover para outro subprojeto…**. O que você move à mão não muda quando separa de novo.
 - Tudo que sai fica guardado em `~/.claude-switcher/memory-backup/`: as memórias apagadas e as últimas 20 versões do `CLAUDE.md`.
 
 ### Skills: o que você pede de novo e de novo
@@ -277,7 +278,7 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 - O Claude Code guarda o login em `~/.claude/.credentials.json`. Para trocar de conta, a extensão grava ali o login salvo da conta escolhida, mexendo só no campo `claudeAiOauth`. Também atualiza o `oauthAccount` em `~/.claude.json`, que é o e-mail mostrado no `/status`.
 - O Claude Code relê esse arquivo antes de cada requisição. Por isso as conversas abertas passam a usar a conta nova **na próxima mensagem**, sem reiniciar nem recarregar nada.
 - O uso vem do mesmo endpoint do `/usage` do Claude Code (`/api/oauth/usage`). A conta em uso é consultada a cada 3 minutos. As outras são consultadas a cada 15 minutos e também na hora exata em que o limite delas zera. A extensão também aproveita as consultas que o próprio Claude Code já faz.
-- As memórias são lidas de `~/.claude/projects/<projeto>/memory/`. O estado da página Memórias (análise, ignoradas, junções que dá para desfazer) fica em `~/.claude-switcher/memories.json`.
+- As memórias são lidas de `~/.claude/projects/<projeto>/memory/`. O estado da página Memórias (análise, ignoradas, junções que dá para desfazer, subprojeto de cada memória) fica em `~/.claude-switcher/memories.json`.
 - Os logins ficam em `~/.claude-switcher/accounts.json`, um arquivo compartilhado entre todas as janelas do VS Code. Na primeira troca é feita uma cópia dos arquivos originais em `~/.claude-switcher/backup/`.
 
 ### Segurança dos tokens
@@ -299,7 +300,7 @@ src/
     advisor.js       qual conta usar (⭐/🔥) e aprendizado do custo de uma sessão
     demand.js        guarda os seus dias de uso, hora a hora, e sorteia semanas possíveis
     planner.js       simula os próximos 7 dias: esperas, pausas e se as contas aguentam
-    curator.js       página Memórias: analisa, junta, ignora, remove e desfaz
+    curator.js       página Memórias: analisa, junta, ignora, remove, desfaz e separa por subprojeto
     memories.js      lê as memórias dos projetos, edita o MEMORY.md e monta a análise
     claudeMd.js      o CLAUDE.md global em seções e itens; adiciona e remove regras
     conversations.js lê as conversas salvas (só o que é novo) em pedidos, comandos e skills usadas; tira os segredos

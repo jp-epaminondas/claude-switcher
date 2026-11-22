@@ -2,11 +2,13 @@
 
 // Side bar page "Memórias": preferences Claude Code saved again in several projects, to join
 // into the global CLAUDE.md; that CLAUDE.md piece by piece; and the project open in VS Code,
-// with its own CLAUDE.md and the memories Claude saved for it.
+// with its own CLAUDE.md and the memories Claude saved for it, by subproject when it holds
+// several repositories.
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const md = require('../core/claudeMd');
+const mem = require('../core/memories');
 const { fmtClock } = require('../core/usage');
 
 const { Collapsed, None } = vscode.TreeItemCollapsibleState;
@@ -275,6 +277,38 @@ function createMemoriesView(app, sidebar) {
     }
   }
 
+  // Claude places the memories not placed yet (or, `force`, all but the ones moved by hand).
+  async function split(force = false) {
+    if (!root || !project || !project.subprojects.length) return;
+    const running = curator.split(root, { force, onBatch: refresh });
+    refresh();
+    try {
+      const n = await vscode.window.withProgress({ location: { viewId: sidebar.VIEW } }, () => running);
+      log(`memórias separadas por subprojeto: ${n}`);
+    } catch (e) {
+      log(`separar memórias: ${e.message}`);
+      vscode.window.showErrorMessage(`Claude Switcher: não consegui separar as memórias (${e.message}). As que já foram separadas ficam.`);
+    }
+    refresh();
+  }
+
+  async function moveProjectMemory(item) {
+    if (!item || !item.memoryId || !project || !project.subprojects.length) return;
+    const picks = [...project.subprojects, mem.GENERAL].map((sub) => ({
+      label: subLabel(sub),
+      sub,
+      description: sub === item.memorySub ? 'onde está agora' : sub === mem.GENERAL ? 'vale para todos ou vários' : '',
+    }));
+    const pick = await vscode.window.showQuickPick(picks, { title: `Mover para outro subprojeto: ${item.memoryName}`, placeHolder: 'Escolha o subprojeto' });
+    if (!pick || pick.sub === item.memorySub) return;
+    try {
+      await curator.moveMemory(root, item.memoryId, pick.sub);
+    } catch (e) {
+      vscode.window.showErrorMessage(`Claude Switcher: ${e.message}`);
+    }
+    refresh();
+  }
+
   async function openFile(file) {
     if (!fs.existsSync(file)) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -323,6 +357,9 @@ function createMemoriesView(app, sidebar) {
     vscode.commands.registerCommand('claudeSwitcher.memories.removeProjectBlock', removeProjectBlock),
     vscode.commands.registerCommand('claudeSwitcher.memories.deleteProjectMemory', deleteProjectMemory),
     vscode.commands.registerCommand('claudeSwitcher.memories.openProjectFile', (item) => item && item.file && openFile(item.file)),
+    vscode.commands.registerCommand('claudeSwitcher.memories.split', () => split()),
+    vscode.commands.registerCommand('claudeSwitcher.memories.splitAgain', () => split(true)),
+    vscode.commands.registerCommand('claudeSwitcher.memories.moveProjectMemory', moveProjectMemory),
     vscode.window.onDidChangeActiveTextEditor(track),
     vscode.workspace.onDidChangeWorkspaceFolders(track),
   ];
@@ -521,38 +558,106 @@ function projectNode(p, root) {
   if (!existing.length) {
     children.push(line('project.noMd', 'Sem CLAUDE.md neste projeto', 'info', { tooltip: `"Nova instrução do projeto" cria ${p.target}.` }));
   }
+  const split = p.subprojects.length > 0;
   const mems = new vscode.TreeItem('Memórias do projeto', p.memories.length ? Collapsed : None);
   mems.id = 'project.memories';
   mems.iconPath = icon('database');
-  mems.description = `${p.memories.length}`;
+  mems.description = split ? `${p.memories.length} · ${plural(p.subprojects.length, 'subprojeto', 'subprojetos')}` : `${p.memories.length}`;
   mems.tooltip = `O que o Claude Code salvou sozinho sobre este projeto.\n${p.memoryDir}`;
-  const taken = new Set();
-  mems.children = MEMORY_GROUPS.map(([key, title, ic, test]) => {
-    const list = p.memories.filter((m) => !taken.has(m.id) && test(m.type));
-    list.forEach((m) => taken.add(m.id));
-    if (!list.length) return null;
-    return Object.assign(new vscode.TreeItem(title, Collapsed), {
-      id: `project.memories.${key}`,
-      iconPath: icon(ic),
-      description: `${list.length}`,
-      children: list.map((m) => {
-        const t = new vscode.MarkdownString('', true);
-        t.appendMarkdown(`**${m.name}**\n\n`);
-        t.appendText(clip(m.body, 800));
-        return line(`project.mem.${m.id}`, clip(m.description || m.name, 90), 'note', {
-          memoryId: m.id,
-          memoryName: m.name,
-          memoryDescription: m.description,
-          contextValue: 'projectMemory',
-          tooltip: t,
-          command: { command: 'vscode.open', title: 'Abrir memória', arguments: [vscode.Uri.file(m.file)] },
-        });
-      }),
-    });
-  }).filter(Boolean);
+  if (split) {
+    mems.contextValue = 'projectMemories.split';
+    mems.tooltip += `\n\nSeparadas pelas pastas com .git: ${p.subprojects.join(', ')}.`;
+  }
+  mems.children = split ? subprojectRows(p) : typeGroups(p.memories, 'project.memories');
   children.push(mems);
   node.children = children;
   return node;
+}
+
+// The memories in the preference / fact / reference groups. A list that is all one type
+// stays flat when `flatten`, so a subproject doesn't open into a single folder. `movable`:
+// the project is split, so each memory can go to another subproject.
+function typeGroups(memories, idPrefix, { flatten = false, movable = false } = {}) {
+  const taken = new Set();
+  const groups = MEMORY_GROUPS.map(([key, title, ic, test]) => {
+    const list = memories.filter((m) => !taken.has(m.id) && test(m.type));
+    list.forEach((m) => taken.add(m.id));
+    return list.length ? { key, title, ic, list } : null;
+  }).filter(Boolean);
+  const item = (m) => memoryItem(m, movable);
+  if (flatten && groups.length === 1) return groups[0].list.map(item);
+  return groups.map((g) =>
+    Object.assign(new vscode.TreeItem(g.title, Collapsed), {
+      id: `${idPrefix}.${g.key}`,
+      iconPath: icon(g.ic),
+      description: `${g.list.length}`,
+      children: g.list.map(item),
+    }),
+  );
+}
+
+function memoryItem(m, movable) {
+  const t = new vscode.MarkdownString('', true);
+  t.appendMarkdown(`**${m.name}**${m.sub ? ` · ${subLabel(m.sub)}${m.subManual ? ' (movida por você)' : ''}` : ''}\n\n`);
+  t.appendText(clip(m.body, 800));
+  return line(`project.mem.${m.id}`, clip(m.description || m.name, 90), 'note', {
+    memoryId: m.id,
+    memoryName: m.name,
+    memoryDescription: m.description,
+    memorySub: m.sub,
+    contextValue: movable ? 'projectMemory.split' : 'projectMemory',
+    tooltip: t,
+    command: { command: 'vscode.open', title: 'Abrir memória', arguments: [vscode.Uri.file(m.file)] },
+  });
+}
+
+const subLabel = (sub) => (sub === mem.GENERAL ? 'Geral' : sub);
+
+// A folder of several repositories: one group per subproject that has memories, then the
+// ones that apply to all, then the ones Claude hasn't placed yet.
+function subprojectRows(p) {
+  const rows = [];
+  const pending = p.memories.filter((m) => m.sub == null);
+  if (p.splitting) {
+    rows.push(line('project.split.running', 'Separando com o Claude…', 'loading~spin', { description: `${p.splitting.done}/${p.splitting.total}` }));
+  } else if (pending.length) {
+    const all = pending.length === p.memories.length;
+    rows.push(
+      line('project.split.run', all ? 'Separar por subprojeto' : `Separar ${plural(pending.length, 'memória nova', 'memórias novas')}`, 'sparkle', {
+        description: 'usa o Claude',
+        tooltip: `O Claude lê o nome e a descrição de cada memória e diz de qual subprojeto ela trata (${p.subprojects.join(', ')}), ou se vale para todos. Usa um pouco do limite da conta em uso (modelo Haiku). O que você mover à mão fica onde pôs.`,
+        command: { command: 'claudeSwitcher.memories.split', title: 'Separar por subprojeto' },
+      }),
+    );
+    if (all) return [...rows, ...typeGroups(p.memories, 'project.memories', { movable: true })];
+  }
+  const by = new Map();
+  for (const m of p.memories) if (m.sub != null) by.set(m.sub, [...(by.get(m.sub) || []), m]);
+  for (const sub of [...p.subprojects, mem.GENERAL]) {
+    const list = by.get(sub);
+    if (!list) continue;
+    const id = `project.sub.${sub}`;
+    rows.push(
+      Object.assign(new vscode.TreeItem(subLabel(sub), Collapsed), {
+        id,
+        iconPath: icon(sub === mem.GENERAL ? 'globe' : 'repo'),
+        description: `${list.length}`,
+        tooltip: sub === mem.GENERAL ? 'Memórias que valem para todos ou para vários subprojetos.' : path.join(p.root, sub),
+        children: typeGroups(list, id, { flatten: true, movable: true }),
+      }),
+    );
+  }
+  if (pending.length) {
+    rows.push(
+      Object.assign(new vscode.TreeItem('Ainda não separadas', Collapsed), {
+        id: 'project.sub.pending',
+        iconPath: icon('question'),
+        description: `${pending.length}`,
+        children: typeGroups(pending, 'project.sub.pending', { flatten: true, movable: true }),
+      }),
+    );
+  }
+  return rows;
 }
 
 // First line of an item as plain text: no list marker, emphasis, code ticks or link targets.

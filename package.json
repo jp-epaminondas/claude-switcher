@@ -394,12 +394,27 @@
         },
         {
           "command": "claudeSwitcher.memories.deleteProjectMemory",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemory",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem =~ /^projectMemory/",
           "group": "inline@1"
         },
         {
+          "command": "claudeSwitcher.memories.moveProjectMemory",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemory.split",
+          "group": "1_memory@0"
+        },
+        {
           "command": "claudeSwitcher.memories.deleteProjectMemory",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemory",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem =~ /^projectMemory/",
+          "group": "1_memory@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.splitAgain",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemories.split",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSwitcher.memories.splitAgain",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && viewItem == projectMemories.split",
           "group": "1_memory@1"
         },
         {
@@ -578,6 +593,10 @@
         },
         {
           "command": "claudeSwitcher.memories.openProjectFile",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.memories.moveProjectMemory",
           "when": "false"
         },
         {
@@ -960,6 +979,24 @@
         "title": "Abrir o arquivo",
         "category": "Claude Switcher",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "claudeSwitcher.memories.split",
+        "title": "Separar as memórias do projeto por subprojeto",
+        "category": "Claude Switcher",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "claudeSwitcher.memories.splitAgain",
+        "title": "Separar as memórias por subprojeto de novo",
+        "category": "Claude Switcher",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeSwitcher.memories.moveProjectMemory",
+        "title": "Mover para outro subprojeto…",
+        "category": "Claude Switcher",
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "claudeSwitcher.skills.analyze",

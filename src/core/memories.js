@@ -316,6 +316,93 @@ function validateGroups(out, memories) {
   return groups;
 }
 
+// --- subprojects -------------------------------------------------------------------------
+
+// A folder that holds several repositories (a monorepo like Rota7/web) is one Claude Code
+// project, so every memory of every repository lands in the same folder. The subprojects are
+// the folders right under it with their own .git; with fewer than two there is nothing to split.
+const GENERAL = '(geral)';
+const SPLIT_BODY_CHARS = 300;
+const SPLIT_ABOUT_CHARS = 240;
+
+function subprojectsOf(root) {
+  let names;
+  try {
+    names = fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && fs.existsSync(path.join(root, d.name, '.git')))
+      .map((d) => d.name)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  } catch {
+    return [];
+  }
+  return names.length > 1 ? names : [];
+}
+
+// What a subproject is, in its own words: the first paragraph of its README (or AGENTS.md, CLAUDE.md).
+function aboutSubproject(root, name) {
+  for (const file of ['README.md', 'AGENTS.md', 'CLAUDE.md']) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(root, name, file), 'utf8');
+    } catch {
+      continue;
+    }
+    const para = text
+      .replace(/^---\r?\n[\s\S]*?\r?\n---/, '')
+      .split(/\r?\n\s*\r?\n/)
+      .map((p) => p.replace(/^\s*(#.*|[-*]\s.*|```[\s\S]*)$/gm, '').replace(/\s+/g, ' ').trim())
+      .find(Boolean);
+    if (para) return para.length > SPLIT_ABOUT_CHARS ? `${para.slice(0, SPLIT_ABOUT_CHARS)}…` : para;
+  }
+  return '';
+}
+
+const SPLIT_PROMPT = `Você separa por subprojeto as memórias que o Claude Code salvou num repositório que reúne vários projetos.
+Cada memória é um fato, uma preferência ou uma referência salva numa conversa. Diga de qual subprojeto cada uma trata.
+
+- sub: o nome do subprojeto exatamente como está na lista. Ao lado de cada nome vem o começo do README dele, quando há.
+- Use "${GENERAL}" quando a memória vale para todos ou para vários subprojetos (servidor, deploy, banco compartilhado, jeito de trabalhar) ou quando não dá para saber.
+- Decida pelo assunto, não só pelo nome do arquivo: uma tela ou regra de um sistema vai para o subprojeto desse sistema, mesmo que a memória cite outro.
+- Responda todas as memórias, com os ids exatamente como vieram.`;
+
+const splitSchema = (names) => ({
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { id: { type: 'string' }, sub: { type: 'string', enum: [...names, GENERAL] } },
+        required: ['id', 'sub'],
+      },
+    },
+  },
+  required: ['items'],
+});
+
+// `subs`: [{ name, about }], about from aboutSubproject().
+function buildSplitPrompt(memories, subs) {
+  const parts = ['## Subprojetos', '', ...subs.map((s) => `- ${s.name}${s.about ? `: ${s.about}` : ''}`), `- ${GENERAL}: vale para todos ou vários`, '', '## Memórias', ''];
+  memories.forEach((m, i) => {
+    const body = m.body.length > SPLIT_BODY_CHARS ? `${m.body.slice(0, SPLIT_BODY_CHARS)}…` : m.body;
+    parts.push(`### m${i + 1}`, `nome: ${m.name}`, `descrição: ${m.description}`, '', body, '');
+  });
+  return parts.join('\n');
+}
+
+// [file name, subproject] for each answer about a memory of this batch and a known subproject.
+function validateSplit(out, memories, names) {
+  const byRef = new Map(memories.map((m, i) => [`m${i + 1}`, m]));
+  const known = new Set([...names, GENERAL]);
+  const found = new Map();
+  for (const it of (out && Array.isArray(out.items) && out.items) || []) {
+    const m = it && byRef.get(String(it.id).trim());
+    if (m && known.has(it.sub)) found.set(path.basename(m.file), it.sub);
+  }
+  return [...found];
+}
+
 module.exports = {
   scanMemories,
   projectDirFor,
@@ -333,4 +420,11 @@ module.exports = {
   parseFrontmatter,
   SYSTEM_PROMPT,
   SCHEMA,
+  GENERAL,
+  subprojectsOf,
+  aboutSubproject,
+  SPLIT_PROMPT,
+  splitSchema,
+  buildSplitPrompt,
+  validateSplit,
 };

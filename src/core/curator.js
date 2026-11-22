@@ -11,6 +11,7 @@ const md = require('./claudeMd');
 const mem = require('./memories');
 
 const KEEP_MERGED = 50;
+const SPLIT_BATCH = 100; // memories per question when splitting by subproject
 
 // The prompt for "Nova instrução", for the global CLAUDE.md or a project's (`label`).
 function instructionPrompt(label) {
@@ -49,8 +50,10 @@ class Curator {
     this.switcherDir = switcherDir;
     this.run = run;
     this.log = log;
-    this.store = new Store(switcherDir, { name: 'memories', defaults: { analysis: null, error: null, ignored: [], merged: [] } });
+    // subprojects: { <project folder>: { <memory file>: { sub, manual? } } }, see split().
+    this.store = new Store(switcherDir, { name: 'memories', defaults: { analysis: null, error: null, ignored: [], merged: [], subprojects: {} } });
     this.running = null;
+    this.splitting = null; // { promise, done, total } while split() runs
   }
 
   // What the analysis would look at right now.
@@ -207,20 +210,80 @@ class Curator {
 
   // --- the project open in VS Code ---------------------------------------------------------
 
-  // Its instruction files and the memories Claude Code saved for it.
+  // Its instruction files and the memories Claude Code saved for it. In a folder of several
+  // repositories, each memory carries its subproject (`sub`, null until split() places it).
   projectView(root) {
     const files = md.projectMdPaths(root).map((file) => ({ file, text: md.readMd(file), exists: fs.existsSync(file) }));
     const dir = mem.projectDirFor(this.paths, root);
     const parts = root.split(/[\\/]+/).filter(Boolean);
+    const subprojects = mem.subprojectsOf(root);
+    const known = new Set([...subprojects, mem.GENERAL]);
+    const placed = subprojects.length ? this.store.load().subprojects[dir] || {} : {};
+    const memories = mem.scanMemories(this.paths, { project: dir }).map((m) => {
+      const at = placed[path.basename(m.file)];
+      return { ...m, sub: at && known.has(at.sub) ? at.sub : null, subManual: !!(at && at.manual) };
+    });
     return {
       root,
+      dir,
       label: parts[parts.length - 1] || root,
       files,
       // "Nova instrução" writes here: the file that exists, the root CLAUDE.md otherwise.
       target: (files.find((f) => f.exists) || files[0]).file,
       memoryDir: path.join(mem.projectsDir(this.paths), dir, 'memory'),
-      memories: mem.scanMemories(this.paths, { project: dir }),
+      memories,
+      subprojects,
+      splitting: this.splitting && { done: this.splitting.done, total: this.splitting.total },
     };
+  }
+
+  // Claude (Haiku) says which subproject each memory is about, 100 at a time; each answer is
+  // kept as it comes, so `onBatch` can show the groups filling in. Only the memories not placed
+  // yet go, or with `force` all but the ones the user moved by hand. Resolves to how many it placed.
+  async split(root, { force = false, onBatch = () => {} } = {}) {
+    if (this.splitting) return this.splitting.promise;
+    const p = this.projectView(root);
+    if (!p.subprojects.length) return 0;
+    const todo = p.memories.filter((m) => (force ? !m.subManual : m.sub == null));
+    if (!todo.length) return 0;
+    const present = new Set(p.memories.map((m) => path.basename(m.file)));
+    const subs = p.subprojects.map((name) => ({ name, about: mem.aboutSubproject(root, name) }));
+    const state = { done: 0, total: todo.length };
+    this.splitting = state;
+    state.promise = (async () => {
+      let placed = 0;
+      try {
+        for (let i = 0; i < todo.length; i += SPLIT_BATCH) {
+          const batch = todo.slice(i, i + SPLIT_BATCH);
+          const out = await this.run({ prompt: mem.buildSplitPrompt(batch, subs), system: mem.SPLIT_PROMPT, schema: mem.splitSchema(p.subprojects) });
+          const found = mem.validateSplit(out, batch, p.subprojects);
+          await this.store.update((d) => {
+            const map = (d.subprojects[p.dir] = d.subprojects[p.dir] || {});
+            for (const file of Object.keys(map)) if (!present.has(file)) delete map[file];
+            for (const [file, sub] of found) if (!(map[file] && map[file].manual)) map[file] = { sub };
+          });
+          placed += found.length;
+          state.done += batch.length;
+          onBatch();
+        }
+        return placed;
+      } finally {
+        this.splitting = null;
+      }
+    })();
+    return state.promise;
+  }
+
+  // The user puts a memory in another subproject; split() leaves it there from then on.
+  async moveMemory(root, id, sub) {
+    const p = this.projectView(root);
+    if (!p.subprojects.includes(sub) && sub !== mem.GENERAL) throw new Error(`"${sub}" não é um subprojeto de ${p.label}`);
+    const m = p.memories.find((x) => x.id === id);
+    if (!m) throw new Error('essa memória não existe mais');
+    await this.store.update((d) => {
+      d.subprojects[p.dir] = d.subprojects[p.dir] || {};
+      d.subprojects[p.dir][path.basename(m.file)] = { sub, manual: true };
+    });
   }
 
   // Takes a section or item out of a project file (`ref` from claudeMd.refOf).

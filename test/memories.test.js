@@ -269,6 +269,67 @@ test('a new instruction: Claude words it, it lands in its section, replacing wha
   assert.ok(w.claudeMd().endsWith('# Deploy\n\n- Antes de deploy, conferir commits pendentes.\n'));
 });
 
+test('a folder of several repositories: memories split by subproject, moved by hand, kept on a new split', async () => {
+  const t = setup();
+  const root = path.join(t.root, 'mono');
+  for (const sub of ['WA', 'Smart', 'docs']) fs.mkdirSync(path.join(root, sub), { recursive: true });
+  fs.mkdirSync(path.join(root, 'WA', '.git'));
+  fs.writeFileSync(path.join(root, 'WA', 'README.md'), '# WA\n\nTudo de WhatsApp\nnum projeto só.\n- Tipo: Node\n\nMais.\n');
+  fs.writeFileSync(path.join(root, 'Smart', '.git'), 'gitdir: ../.git/modules/Smart\n'); // a submodule
+  const dir = path.join(mem.projectsDir(t.paths), mem.encodeProject(root), 'memory');
+  fs.mkdirSync(dir, { recursive: true });
+  const write = (name, description) => fs.writeFileSync(path.join(dir, name), `---\nname: ${name.replace('.md', '')}\ndescription: ${JSON.stringify(description)}\nmetadata:\n  type: project\n---\n\n${description}\n`);
+  write('wa-tiques.md', 'WA: tiques como no WhatsApp');
+  write('smart-robo.md', 'Smart: o robo aceita cargas');
+  write('servidor.md', 'Servidor: acesso pela Cloudflare');
+
+  const prompts = [];
+  const answer = { 'wa-tiques': 'WA', 'smart-robo': 'Smart', servidor: '(geral)' };
+  const run = async ({ prompt, schema }) => {
+    prompts.push(prompt);
+    assert.deepEqual(schema.properties.items.items.properties.sub.enum, ['Smart', 'WA', '(geral)'], 'docs has no .git');
+    const items = [...prompt.matchAll(/### (m\d+)\nnome: ([^\n]+)/g)].map(([, id, name]) => ({ id, sub: answer[name] }));
+    return { items: [...items, { id: 'm1', sub: 'Inventado' }, { id: 'm99', sub: 'WA' }] }; // the last two are dropped
+  };
+  const curator = new Curator({ paths: t.paths, switcherDir: path.join(t.root, '.claude-switcher'), run });
+  const subs = () => Object.fromEntries(curator.projectView(root).memories.map((m) => [m.name, m.sub]));
+
+  let p = curator.projectView(root);
+  assert.deepEqual(p.subprojects, ['Smart', 'WA']);
+  assert.deepEqual(subs(), { servidor: null, 'smart-robo': null, 'wa-tiques': null });
+
+  let batches = 0;
+  assert.equal(await curator.split(root, { onBatch: () => batches++ }), 3);
+  assert.equal(batches, 1);
+  assert.ok(prompts[0].includes('- Smart\n- WA: Tudo de WhatsApp num projeto só.\n'), 'each subproject with the start of its README');
+  assert.deepEqual(subs(), { servidor: '(geral)', 'smart-robo': 'Smart', 'wa-tiques': 'WA' });
+  assert.equal(curator.projectView(root).splitting, null);
+
+  // Only the new memory goes to Claude; a gone memory leaves the cache.
+  write('wa-som.md', 'WA: som de mensagem nova');
+  answer['wa-som'] = 'WA';
+  fs.unlinkSync(path.join(dir, 'servidor.md'));
+  await curator.split(root);
+  assert.equal(prompts.length, 2);
+  assert.ok(prompts[1].includes('nome: wa-som') && !prompts[1].includes('nome: wa-tiques'));
+  const saved = () => JSON.parse(fs.readFileSync(path.join(t.root, '.claude-switcher', 'memories.json'), 'utf8')).subprojects[mem.encodeProject(root)];
+  assert.deepEqual(Object.keys(saved()).sort(), ['smart-robo.md', 'wa-som.md', 'wa-tiques.md']);
+  assert.equal(await curator.split(root), 0, 'nothing new: no question');
+  assert.equal(prompts.length, 2);
+
+  // Moved by hand, it stays put when everything is split again.
+  const robo = curator.projectView(root).memories.find((m) => m.name === 'smart-robo');
+  await curator.moveMemory(root, robo.id, '(geral)');
+  await assert.rejects(curator.moveMemory(root, robo.id, 'docs'), /não é um subprojeto/);
+  await curator.split(root, { force: true });
+  assert.ok(!prompts[2].includes('nome: smart-robo'));
+  assert.deepEqual(subs(), { 'smart-robo': '(geral)', 'wa-som': 'WA', 'wa-tiques': 'WA' });
+  assert.equal(curator.projectView(root).memories.find((m) => m.name === 'smart-robo').subManual, true);
+
+  // A folder with one repository or none isn't split.
+  assert.deepEqual(curator.projectView(path.join(root, 'WA')).subprojects, []);
+});
+
 test('the open project: its CLAUDE.md files and memories, edited and undone', async () => {
   const w = world();
   const root = path.join(w.t.root, 'work', 'alpha');
