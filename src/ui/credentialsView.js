@@ -88,11 +88,29 @@ function createCredentialsView(app, sidebar) {
     host.broadcast({ op: 'sync-lock' });
   }
 
+  // A key from another window (sync-unlock, or the answer to sync-ask); true when it opened
+  // the vault here.
+  function adopt({ key, until }) {
+    if (!(until > Date.now()) || !vault.exists() || (vault.unlocked && key === vault.exportKey()) || !vault.adoptKey(key)) return false;
+    arm(until);
+    refresh();
+    return true;
+  }
+
+  // A window opened or reloaded after the unlock missed the broadcast: it takes the key from
+  // one still unlocked, until the same time, instead of asking for the master password again.
+  async function fromPeers() {
+    if (vault.unlocked || !vault.exists() || !app.access.can('credenciais.usar')) return vault.unlocked;
+    const got = (await host.broadcast({ op: 'sync-ask' })).find((a) => a && a.ok);
+    return !!got && adopt(got);
+  }
+
   // Asks for the master password (up to 3 tries). `why` says who wants it.
   function unlock(why) {
     if (vault.unlocked) return Promise.resolve(true);
     if (unlocking) return unlocking;
     unlocking = (async () => {
+      if (await fromPeers()) return true;
       const min = lockMinutes();
       for (let i = 0; i < 3; i++) {
         const pw = await vscode.window.showInputBox({
@@ -129,7 +147,7 @@ function createCredentialsView(app, sidebar) {
   async function resolveFor(msg) {
     if (!vault.exists()) return { ok: false, error: 'o cofre ainda não foi criado (página Credenciais do Claude Switcher)' };
     const refs = Array.isArray(msg.refs) ? msg.refs.map(String) : [];
-    if (!vault.unlocked) {
+    if (!(await fromPeers())) {
       // A native dialog first: it gets noticed even with the window in the background.
       const choice = await vscode.window.showWarningMessage(
         `O Claude quer usar ${refs.join(', ')}`,
@@ -154,7 +172,7 @@ function createCredentialsView(app, sidebar) {
 
   async function handle(msg) {
     const op = msg && msg.op;
-    if ((op === 'list' || op === 'resolve') && !app.access.can('credenciais.usar')) return { ok: false, error: app.access.why('credenciais.usar') };
+    if (['list', 'resolve', 'sync-ask'].includes(op) && !app.access.can('credenciais.usar')) return { ok: false, error: app.access.why('credenciais.usar') };
     switch (op) {
       case 'list':
         return { ok: true, locked: !vault.unlocked, entries: vault.catalog().entries };
@@ -163,11 +181,10 @@ function createCredentialsView(app, sidebar) {
       // Also reaches the windows already unlocked: after a master password change elsewhere
       // they would otherwise save with the old key and bring the old password back.
       case 'sync-unlock':
-        if (msg.until > Date.now() && vault.exists() && !(vault.unlocked && msg.key === vault.exportKey()) && vault.adoptKey(msg.key)) {
-          arm(msg.until);
-          refresh();
-        }
+        adopt(msg);
         return { ok: true };
+      case 'sync-ask':
+        return vault.unlocked ? { ok: true, key: vault.exportKey(), until: lockAt } : { ok: false, error: 'o cofre está trancado' };
       case 'sync-lock':
         lockHere();
         return { ok: true };
@@ -678,6 +695,7 @@ function createCredentialsView(app, sidebar) {
   }
   host.start(vscode.window.state.focused);
   refresh();
+  fromPeers().catch((e) => log(`credenciais: ${e.message}`));
 
   const commands = {
     create,

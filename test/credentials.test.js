@@ -214,6 +214,31 @@ test('segredo: lista shows names, exec injects values that never show up', async
   }
 });
 
+test('a window opened after the unlock takes the key from one still unlocked', async () => {
+  const dir = tmpDir();
+  const first = new Vault(dir);
+  await first.create('senha mestra boa');
+  await first.addEntry('SERVER SSH', [{ name: 'Senha', value: SECRET, secret: true }]);
+  const until = Date.now() + 60000;
+  const answer = (vault) => async (msg) =>
+    msg.op === 'sync-ask' && vault.unlocked ? { ok: true, key: vault.exportKey(), until } : { ok: false, error: 'o cofre está trancado' };
+  const late = new Vault(dir);
+  const hosts = [new SecretHost({ switcherDir: dir, handle: answer(first) }), new SecretHost({ switcherDir: dir, handle: answer(late) })];
+  hosts.forEach((h) => h.start());
+  try {
+    const got = (await hosts[1].broadcast({ op: 'sync-ask' })).find((a) => a && a.ok);
+    assert.equal(got.until, until);
+    assert.ok(late.adoptKey(got.key));
+    assert.equal(late.resolve('server-ssh.senha').field.value, SECRET);
+
+    first.lock();
+    late.lock();
+    assert.deepEqual(await hosts[1].broadcast({ op: 'sync-ask' }), [{ ok: false, error: 'o cofre está trancado' }]);
+  } finally {
+    hosts.forEach((h) => h.stop());
+  }
+});
+
 test('segredo: no VS Code window, a clear error', async () => {
   const r = await segredo(tmpDir(), ['lista']);
   assert.equal(r.code, 2);

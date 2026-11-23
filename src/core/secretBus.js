@@ -3,7 +3,8 @@
 // How `segredo` (run by Claude) reaches the vault: every VS Code window listens on a local
 // pipe of its own and registers it in <switcherDir>/segredo/<pid>.json with the last time it
 // had focus. `segredo` asks the window used most recently, so the unlock prompt shows up where
-// the user is. Windows also tell each other when the vault is unlocked or locked.
+// the user is. Windows also tell each other when the vault is unlocked or locked, and a window
+// opened (or reloaded) later asks the others for the key instead of the master password.
 //
 // Protocol: one JSON line in, one JSON line out, then the connection closes.
 const fs = require('fs');
@@ -128,10 +129,11 @@ class SecretHost {
     } catch {}
   }
 
-  // Tells every other window (unlock / lock), without waiting on the ones that don't answer.
-  async broadcast(msg) {
+  // Tells every other window (unlock / lock), without waiting on the ones that don't answer;
+  // resolves to their answers (null for those).
+  broadcast(msg) {
     const others = windows(this.switcherDir).filter((w) => w.id !== this.id);
-    await Promise.all(others.map((w) => send(w.pipe, msg, 2000).catch(() => null)));
+    return Promise.all(others.map((w) => send(w.pipe, msg, 2000).catch(() => null)));
   }
 
   stop() {
