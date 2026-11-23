@@ -153,7 +153,9 @@ function createCredentialsView(app, sidebar) {
   }
 
   async function handle(msg) {
-    switch (msg && msg.op) {
+    const op = msg && msg.op;
+    if ((op === 'list' || op === 'resolve') && !app.access.can('credenciais.usar')) return { ok: false, error: app.access.why('credenciais.usar') };
+    switch (op) {
       case 'list':
         return { ok: true, locked: !vault.unlocked, entries: vault.catalog().entries };
       case 'resolve':
@@ -704,10 +706,15 @@ function createCredentialsView(app, sidebar) {
   const disposables = [
     vscode.window.onDidChangeWindowState((s) => s.focused && host.touch(true)),
     vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('claudeSwitcher.credentials.lockMinutes') && onLockMinutesChanged()),
-    ...Object.entries(commands).map(([name, fn]) => vscode.commands.registerCommand(`claudeSwitcher.cred.${name}`, guarded(fn))),
+    ...Object.entries(commands).map(([name, fn]) => app.access.command(`claudeSwitcher.cred.${name}`, guarded(fn))),
   ];
 
   return {
+    // Without the permission any more, an open vault closes here.
+    onAccess() {
+      if (!app.access.can('credenciais.usar') && vault.unlocked) lockHere();
+      else refresh();
+    },
     dispose() {
       clearTimeout(lockTimer);
       hideAll();

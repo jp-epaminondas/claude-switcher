@@ -1,6 +1,7 @@
 'use strict';
 
-// Entry point: builds the pieces, registers the commands and runs the refresh loop.
+// Entry point: the Acesso page first; once the person picked how to use the switcher, the rest
+// of the pieces, the commands and the refresh loop.
 const vscode = require('vscode');
 const fs = require('fs');
 const { claudePaths, switcherDir } = require('./core/paths');
@@ -24,10 +25,11 @@ const { createMemoriesView } = require('./ui/memoriesView');
 const { createSkillsView } = require('./ui/skillsView');
 const { createCredentialsView } = require('./ui/credentialsView');
 const { createLocksView } = require('./ui/locksView');
+const { createAccess } = require('./ui/accessView');
 
 const MINUTE = 60 * 1000;
 
-function activate(context) {
+async function activate(context) {
   const output = vscode.window.createOutputChannel('Claude Switcher');
   const config = () => vscode.workspace.getConfiguration('claudeSwitcher');
   const adviceOptions = () => ({
@@ -50,143 +52,171 @@ function activate(context) {
     log,
     config,
     advise: rank,
-    render: () => render(),
-    tick: (opts) => tick(opts),
+    render: () => {},
+    tick: () => {},
   };
-  // Questions to Claude run from the switcher's own folder, which has no project settings or memories.
-  app.askClaude = (q) => {
-    fs.mkdirSync(dir, { recursive: true });
-    return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
-  };
-  app.curator = new Curator({ paths, switcherDir: dir, log, run: app.askClaude });
-  app.skillCurator = new SkillCurator({ paths, switcherDir: dir, log, run: app.askClaude });
-  const actions = createActions(app);
-  const menu = createMenu(app, actions);
-  const sidebar = createSidebar();
-  const accountsView = createAccountsView(app, sidebar); // first page: the one that opens
-  const statusBar = createStatusBar(app);
-  const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
-  const topicGuard = (app.topicGuard = createTopicGuard(app));
-  const sameProject = (app.sameProject = createSameProject(app));
-  const approvals = (app.approvals = createApprovals(app, sidebar));
-  const memoriesView = createMemoriesView(app, sidebar);
-  const skillsView = createSkillsView(app, sidebar);
-  const credentialsView = createCredentialsView(app, sidebar);
-  const locksView = createLocksView(app, sidebar);
+  const access = (app.access = createAccess(app, context));
+  const sidebar = createSidebar({ command: access.command, canPage: access.canPage });
+  access.attach(sidebar);
+  context.subscriptions.push(output, access, sidebar);
 
-  context.subscriptions.push(
-    output,
-    sidebar,
-    statusBar,
-    autoSwitch,
-    topicGuard,
-    sameProject,
-    approvals,
-    memoriesView,
-    skillsView,
-    credentialsView,
-    locksView,
-    vscode.commands.registerCommand('claudeSwitcher.menu', menu.show),
-    vscode.commands.registerCommand('claudeSwitcher.switchNext', actions.switchNext),
-    vscode.commands.registerCommand('claudeSwitcher.addAccount', actions.addAccount),
-    vscode.commands.registerCommand('claudeSwitcher.refresh', () => tick({ force: true })),
-    vscode.commands.registerCommand('claudeSwitcher.toggleAutoSwitch', autoSwitch.toggle),
-    vscode.commands.registerCommand('claudeSwitcher.toggleTopicGuard', topicGuard.toggle),
-    vscode.commands.registerCommand('claudeSwitcher.toggleSameProject', sameProject.toggle),
-    vscode.commands.registerCommand('claudeSwitcher.toggleApprovals', approvals.toggle),
-    vscode.commands.registerCommand('claudeSwitcher.approvalsAlert', approvals.chooseAlert),
-    vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
-    vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
-    vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('claudeSwitcher.autoSwitch') || e.affectsConfiguration('claudeSwitcher.switchAtPercent')) {
-        autoSwitch.onConfigChanged();
-      }
-      else if (e.affectsConfiguration('claudeSwitcher.topicGuard')) topicGuard.onConfigChanged();
-      else if (e.affectsConfiguration('claudeSwitcher.sameProject')) sameProject.onConfigChanged();
-      else if (e.affectsConfiguration('claudeSwitcher.approvals')) approvals.onConfigChanged();
-      else if (e.affectsConfiguration('claudeSwitcher')) render();
-    }),
-  );
-
-  function render() {
-    let data;
-    try {
-      data = store.load();
-    } catch (e) {
-      statusBar.showError(e);
-      accountsView.refresh();
-      return;
-    }
-    const now = Date.now();
-    accountsView.refresh(data, now);
-    statusBar.update(data, app.advise(data, now), now);
-    menu.refresh();
-  }
-
-  // One pass: follow logins/refreshes, pick up usage, report accounts that ran out or came back.
-  let ticking = false;
-  let tickAgain = false;
-  let forceAgain = false;
-  let lastCredMtime = -1;
-  let lastConfigMtime = -1;
-  let lastSyncAt = 0;
-
-  async function tick({ force = false } = {}) {
-    if (ticking) {
-      tickAgain = true;
-      forceAgain = forceAgain || force;
-      return;
-    }
-    ticking = true;
-    try {
-      const credMtime = mtime(paths.credentials);
-      if (force || credMtime !== lastCredMtime || Date.now() - lastSyncAt > 5 * MINUTE) {
-        lastCredMtime = credMtime;
-        lastSyncAt = Date.now();
-        const added = await app.sw.syncLive();
-        if (added) vscode.window.showInformationMessage(`Claude Switcher: ${added.label} salva (${added.email}).`);
-      }
-      const configMtime = mtime(paths.globalConfig);
-      if (configMtime !== lastConfigMtime) {
-        lastConfigMtime = configMtime;
-        await app.sw.absorbClaudeCache();
-      }
-      const activeEveryMs = Math.max(1, Number(config().get('pollIntervalMinutes')) || 3) * MINUTE;
-      await app.sw.refreshUsage({ force, activeEveryMs });
-      for (const ev of await app.sw.collectEvents(adviceOptions())) actions.onEvent(ev);
-    } catch (e) {
-      lastCredMtime = -1; // retry the sync on the next tick
-      log(`erro: ${e.stack || e.message}`);
-    } finally {
-      ticking = false;
-      render();
-      if (tickAgain) {
-        const f = forceAgain;
-        tickAgain = forceAgain = false;
-        tick({ force: f });
-      }
-    }
-  }
-
-  // Claude Code rewrites the first two when it refreshes a token or someone logs in; other
-  // VS Code windows rewrite the store. Polling stat() is cheap and dependable on Windows.
-  const watched = [
-    [paths.credentials, 2000, () => tick()],
-    [paths.globalConfig, 5000, () => tick()],
-    [store.file, 2000, () => render()],
-  ];
-  for (const [file, interval, fn] of watched) fs.watchFile(file, { interval }, fn);
-  const timer = setInterval(() => tick(), 30 * 1000);
-  context.subscriptions.push({
-    dispose() {
-      clearInterval(timer);
-      for (const [file] of watched) fs.unwatchFile(file);
-    },
+  // Nothing else starts (hooks, usage, the vault's pipe) before the person picks how to use it.
+  let features = null;
+  access.onDidChange(({ opening }) => {
+    if (features) features.onAccess();
+    else if (access.open()) features = start();
+    sidebar.reconcile(opening);
   });
+  await access.start();
 
-  render();
-  tick();
+  function start() {
+    app.render = () => render();
+    app.tick = (opts) => tick(opts);
+    // Questions to Claude run from the switcher's own folder, which has no project settings or memories.
+    app.askClaude = (q) => {
+      fs.mkdirSync(dir, { recursive: true });
+      return runClaude({ exe: claudeExecutable(), cwd: dir, ...q });
+    };
+    app.curator = new Curator({ paths, switcherDir: dir, log, run: app.askClaude });
+    app.skillCurator = new SkillCurator({ paths, switcherDir: dir, log, run: app.askClaude });
+    const actions = createActions(app);
+    const menu = createMenu(app, actions);
+    const accountsView = createAccountsView(app, sidebar); // the first page after Acesso: the one the panel opens on
+    const statusBar = createStatusBar(app);
+    const autoSwitch = (app.autoSwitch = createAutoSwitch(app));
+    const topicGuard = (app.topicGuard = createTopicGuard(app));
+    const sameProject = (app.sameProject = createSameProject(app));
+    const approvals = (app.approvals = createApprovals(app, sidebar));
+    const memoriesView = createMemoriesView(app, sidebar);
+    const skillsView = createSkillsView(app, sidebar);
+    const credentialsView = createCredentialsView(app, sidebar);
+    const locksView = createLocksView(app, sidebar);
+
+    const command = access.command;
+    context.subscriptions.push(
+      statusBar,
+      autoSwitch,
+      topicGuard,
+      sameProject,
+      approvals,
+      memoriesView,
+      skillsView,
+      credentialsView,
+      locksView,
+      command('claudeSwitcher.menu', menu.show),
+      command('claudeSwitcher.switchNext', actions.switchNext),
+      command('claudeSwitcher.addAccount', actions.addAccount),
+      command('claudeSwitcher.refresh', () => tick({ force: true })),
+      command('claudeSwitcher.toggleAutoSwitch', autoSwitch.toggle),
+      command('claudeSwitcher.toggleTopicGuard', topicGuard.toggle),
+      command('claudeSwitcher.toggleSameProject', sameProject.toggle),
+      command('claudeSwitcher.toggleApprovals', approvals.toggle),
+      command('claudeSwitcher.approvalsAlert', approvals.chooseAlert),
+      command('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
+      command('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
+      command('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('claudeSwitcher.autoSwitch') || e.affectsConfiguration('claudeSwitcher.switchAtPercent')) {
+          autoSwitch.onConfigChanged();
+        }
+        else if (e.affectsConfiguration('claudeSwitcher.topicGuard')) topicGuard.onConfigChanged();
+        else if (e.affectsConfiguration('claudeSwitcher.sameProject')) sameProject.onConfigChanged();
+        else if (e.affectsConfiguration('claudeSwitcher.approvals')) approvals.onConfigChanged();
+        else if (e.affectsConfiguration('claudeSwitcher')) render();
+      }),
+    );
+
+    function render() {
+      let data;
+      try {
+        data = store.load();
+      } catch (e) {
+        statusBar.showError(e);
+        accountsView.refresh();
+        return;
+      }
+      const now = Date.now();
+      accountsView.refresh(data, now);
+      if (access.can('contas.usar')) statusBar.update(data, app.advise(data, now), now);
+      else statusBar.hide();
+      menu.refresh();
+    }
+
+    // One pass: follow logins/refreshes, pick up usage, report accounts that ran out or came back.
+    let ticking = false;
+    let tickAgain = false;
+    let forceAgain = false;
+    let lastCredMtime = -1;
+    let lastConfigMtime = -1;
+    let lastSyncAt = 0;
+
+    async function tick({ force = false } = {}) {
+      if (!access.open()) return;
+      if (ticking) {
+        tickAgain = true;
+        forceAgain = forceAgain || force;
+        return;
+      }
+      ticking = true;
+      try {
+        const credMtime = mtime(paths.credentials);
+        if (force || credMtime !== lastCredMtime || Date.now() - lastSyncAt > 5 * MINUTE) {
+          lastCredMtime = credMtime;
+          lastSyncAt = Date.now();
+          const added = await app.sw.syncLive();
+          if (added) vscode.window.showInformationMessage(`Claude Switcher: ${added.label} salva (${added.email}).`);
+        }
+        const configMtime = mtime(paths.globalConfig);
+        if (configMtime !== lastConfigMtime) {
+          lastConfigMtime = configMtime;
+          await app.sw.absorbClaudeCache();
+        }
+        const activeEveryMs = Math.max(1, Number(config().get('pollIntervalMinutes')) || 3) * MINUTE;
+        await app.sw.refreshUsage({ force, activeEveryMs });
+        const events = await app.sw.collectEvents(adviceOptions());
+        if (access.can('contas.usar')) events.forEach(actions.onEvent);
+      } catch (e) {
+        lastCredMtime = -1; // retry the sync on the next tick
+        log(`erro: ${e.stack || e.message}`);
+      } finally {
+        ticking = false;
+        render();
+        if (tickAgain) {
+          const f = forceAgain;
+          tickAgain = forceAgain = false;
+          tick({ force: f });
+        }
+      }
+    }
+
+    // Claude Code rewrites the first two when it refreshes a token or someone logs in; other
+    // VS Code windows rewrite the store. Polling stat() is cheap and dependable on Windows.
+    const watched = [
+      [paths.credentials, 2000, () => tick()],
+      [paths.globalConfig, 5000, () => tick()],
+      [store.file, 2000, () => render()],
+    ];
+    for (const [file, interval, fn] of watched) fs.watchFile(file, { interval }, fn);
+    const timer = setInterval(() => tick(), 30 * 1000);
+    context.subscriptions.push({
+      dispose() {
+        clearInterval(timer);
+        for (const [file] of watched) fs.unwatchFile(file);
+      },
+    });
+
+    render();
+    tick();
+
+    return {
+      // Something the pieces depend on changed: the session opened, closed or got other permissions.
+      onAccess() {
+        render();
+        credentialsView.onAccess();
+        tick();
+      },
+    };
+  }
 }
 
 function deactivate() {}

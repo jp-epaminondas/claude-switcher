@@ -4,11 +4,13 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 
 ## Como usar
 
+**Na primeira vez**, o painel abre na página **Acesso**, e nada mais funciona até você escolher: **Entrar sem login** (tudo liberado, como sempre foi) ou **Entrar em um grupo** (a sua organização confere o login e diz o que cada nível pode usar). Veja [Acesso](#acesso-sem-login-ou-em-um-grupo).
+
 **Ícone na barra lateral esquerda:** é o ícone de uma pessoa com duas setas circulares, que abre o painel **Contas**.
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem seis páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais**, **Aprovações** e **Travas**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas.
+- O painel tem sete páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais**, **Aprovações**, **Travas** e **Acesso**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas. Num grupo, só aparecem as páginas que o seu nível permite.
 - No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -21,7 +23,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Quando a conta em uso esgota, aparece *"Conta 1 esgotou. Volta 15:30. [Trocar para Conta 2]"*. Um clique troca de conta.
 - Quando uma conta esgotada volta, aparece *"✅ Conta 3 voltou e já está disponível. [Usar Conta 3]"*.
 
-**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Ligar/desligar conversas no mesmo projeto, Ligar/desligar as aprovações, Analisar as memórias de novo, Abrir o CLAUDE.md global, Procurar tarefas repetidas para virar skills, Nova skill.
+**Comandos (Ctrl+Shift+P → "Claude Switcher"):** Acesso, Contas, Trocar para a próxima conta disponível, Adicionar conta, Atualizar uso, Ligar/desligar o autoswitcher, Ligar/desligar o aviso de assunto novo, Ligar/desligar conversas no mesmo projeto, Ligar/desligar as aprovações, Analisar as memórias de novo, Abrir o CLAUDE.md global, Procurar tarefas repetidas para virar skills, Nova skill.
 
 ### Autoswitcher
 
@@ -106,6 +108,57 @@ Como funciona:
 - Algumas ações continuam travadas mesmo assim: apagar dados ou pastas de produção, abrir sessão interativa ou túnel no servidor, mostrar senhas e segredos e mandar dados para fora.
 - Liberar põe uma exceção em `autoMode.allow` no `~/.claude/settings.json`, depois das regras que o Claude Code já traz (`"$defaults"`). Travar tira a exceção, e o resto do arquivo fica como estava. Ao passar o mouse na linha, aparece o texto exato. O estado fica só nesse arquivo, então todas as janelas mostram o mesmo, e as conversas abertas passam a valer na próxima ação. Para conferir: `claude auto-mode config`.
 - O Claude não se libera sozinho: no modo automático, mudar as próprias permissões sem você pedir é uma das ações seguradas.
+
+### Acesso: sem login ou em um grupo
+
+Antes de a extensão abrir de fato, a página **Acesso** pergunta como você quer usá-la. Até a escolha, nada roda: nem troca de conta, nem hooks, nem cofre.
+
+- **Entrar sem login:** tudo liberado neste computador, inclusive a configuração. É o jeito de sempre.
+- **Entrar em um grupo:** você cola a URL que a sua organização passou, e a próxima tela pede o e-mail e a senha do grupo. Depois de entrar, só aparece o que o seu nível permite: as páginas que ele não permite somem do menu **…**, e os comandos dizem *"o seu nível no grupo Rota7 (OPERADOR) não permite …"*.
+
+Quem cuida dos usuários, dos níveis e do que cada nível pode é a API da organização. A extensão não tem servidor nem banco de dados próprios: ela guarda só a URL do grupo e a última resposta da API (o token, o nível e as permissões, nunca a senha), no armazenamento seguro do VS Code. A escolha vale para todas as janelas.
+
+- **A sessão:** a extensão confere as permissões ao abrir e a cada 5 minutos, ou quando você clica em **Conferir agora**. Um nível mudado na API vale aí, sem entrar de novo. Quando a API diz que a sessão acabou (401), ou quando o token vence, a extensão trava e pede o login de novo.
+- **Sem internet:** a extensão segue com as últimas permissões até o token vencer.
+- **Para sair do grupo**, use **Sair do grupo** na página Acesso. A extensão volta a perguntar como você quer usar.
+- **Limite:** quem bloqueia é a própria extensão, no computador de cada pessoa. Quem escolhe "Entrar sem login" tem tudo, e quem edita o código instalado ou o `settings.json` do VS Code à mão consegue se liberar. O grupo serve para organizar o acesso de uma equipe, não como proteção contra quem quer burlar.
+
+**Permissões que a API pode dar a um nível** (`*` dá todas):
+
+| Permissão | O que libera |
+|---|---|
+| `contas.usar` | ver as contas e trocar de conta (página Contas, barra de status, menu rápido) |
+| `contas.gerenciar` | adicionar, renomear e remover contas |
+| `memorias` | a página Memórias |
+| `skills` | a página Skills e a análise automática |
+| `credenciais.usar` | destrancar o cofre, copiar a referência e deixar o Claude usar os segredos pelo `segredo` |
+| `credenciais.gerenciar` | criar, editar, ver, copiar e apagar credenciais, importar e trocar a senha mestra |
+| `aprovacoes` | a página Aprovações e responder os pedidos |
+| `travas` | a página Travas |
+| `configuracao` | ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações |
+
+**O que a API do grupo precisa responder.** A URL que a pessoa cola é a base, `https://` (`http://` só em `localhost`, para testes), sem parâmetros. A extensão não segue redirecionamentos, então a senha só vai para essa URL.
+
+```
+GET  {url}               → 200 { "nome": "Rota7" }
+
+POST {url}/entrar        { "email": "maria@empresa.com", "senha": "…" }
+                         → 200 { "token": "…", "expira_em": "2026-11-23T08:00:00Z",
+                                 "usuario": { "nome": "Maria", "nivel": "OPERADOR" },
+                                 "permissoes": ["contas.usar", "aprovacoes"] }
+                         → 401 { "erro": "E-mail ou senha inválidos." }
+                         → 429 { "erro": "…" }   muitas tentativas
+
+GET  {url}/permissoes    Authorization: Bearer <token>
+                         → 200 { "nivel": "OPERADOR", "permissoes": [ … ] }
+                         → 401   a sessão acabou: a extensão pede o login de novo
+```
+
+- `expira_em` é opcional, em ISO 8601. Sem ele, o token vale até a API responder 401.
+- Uma permissão que a extensão não conhece é ignorada. Um nível sem permissões entra, mas só vê a página Acesso.
+- O `erro` aparece para a pessoa como está, então não ponha detalhes técnicos nele.
+- **No Gerenciador do Rota7:** `/entrar` reaproveita o login que já existe (`POST /api/v1/autenticar`, com a chave da aplicação "Claude Switcher" guardada na própria API). Os níveis são os da aplicação no cadastro de aplicações (tabela `ACESSO`), e o que cada nível pode fica num arquivo de configuração, como o `config/permissions.php`, sem tabela nova. `/permissoes` lê o nível atual do usuário em `USUARIO_APLICACAO`. Não use `/api/informacoes-usuario` para isso: ela devolve o que estava no token no login.
+- **Para testar sem a API de verdade:** `node test/grupoFalso.js` sobe um grupo de teste em `http://localhost:7317/grupo`, com `admin@exemplo.com` (nível MASTER, tudo) e `operador@exemplo.com` (OPERADOR), as duas com a senha `teste`.
 
 ### Qual conta usar (⭐ e 🔥)
 
@@ -319,6 +372,7 @@ src/
     claudeHook.js    instala e remove os hooks do autoswitcher, do aviso de assunto novo, das conversas no mesmo projeto e das aprovações no settings.json do Claude Code; uma escrita de cada vez nesse arquivo
     locks.js         página Travas: as exceções do modo automático em autoMode.allow, liberadas e travadas de novo
     limitQueue.js    fila de pedidos entre um hook e a extensão (~/.claude-switcher/limits/ e topics/)
+    access.js        acesso: a URL do grupo, a sessão, o que cada comando e página precisa, e a conversa com a API do grupo
     approvals.js     aprovações: os pedidos de permissão em ~/.claude-switcher/approvals/, as janelas abertas e como cada pedido aparece
     topic.js         aviso de assunto novo: lê o fim da conversa e monta a pergunta ao Haiku
     store.js         accounts.json e memories.json compartilhados entre janelas
@@ -332,7 +386,8 @@ src/
     uninstall.js     tira os hooks do settings.json quando a extensão é desinstalada
     segredo.js       o comando que o Claude usa para rodar algo com uma credencial (copiado para ~/.claude-switcher/)
   ui/                tudo que aparece no VS Code
-    sidebar.js       o painel da barra lateral, uma página de cada vez
+    sidebar.js       o painel da barra lateral, uma página de cada vez, só as que o acesso permite
+    accessView.js    página Acesso (webview): sem login ou grupo, o login, a sessão guardada e a conferência das permissões
     accountsView.js  página Contas
     memoriesView.js  página Memórias
     skillsView.js    página Skills e os botões do rascunho no editor
@@ -346,8 +401,8 @@ src/
     sameProject.js   liga/desliga as conversas no mesmo projeto e conta quantas há no projeto aberto
     approvalsView.js página Aprovações (uma webview que entra no lugar da lista): marca a janela, mostra os pedidos e manda as respostas
     present.js       textos de cada conta, compartilhados pelas telas
-test/                testes do core (pasta temporária, API e Claude falsos, sem rede)
-media/               ícone da barra lateral e os cartões da página Aprovações
+test/                testes do core (pasta temporária, API e Claude falsos, sem rede); grupoFalso.js é um grupo de teste
+media/               ícone da barra lateral, os cartões da página Aprovações e as telas da página Acesso
 ```
 
 ```sh

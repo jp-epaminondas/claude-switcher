@@ -305,6 +305,7 @@ function createSkillsView(app, sidebar) {
   // Once a week at most, when enough new conversations came in, one window looks for repeats
   // and tells about the new ones.
   async function autoCheck() {
+    if (!app.access.can('skills')) return;
     if (!config().get('skills.autoAnalyze', true)) return;
     try {
       await curator.refreshIndex();
@@ -346,18 +347,18 @@ function createSkillsView(app, sidebar) {
   }
 
   const disposables = [
-    vscode.commands.registerCommand('claudeSwitcher.skills.analyze', analyze),
-    vscode.commands.registerCommand('claudeSwitcher.skills.create', create),
-    vscode.commands.registerCommand('claudeSwitcher.skills.ignore', ignore),
-    vscode.commands.registerCommand('claudeSwitcher.skills.clearIgnored', clearIgnored),
-    vscode.commands.registerCommand('claudeSwitcher.skills.install', install),
-    vscode.commands.registerCommand('claudeSwitcher.skills.discard', discard),
-    vscode.commands.registerCommand('claudeSwitcher.skills.review', review),
-    vscode.commands.registerCommand('claudeSwitcher.skills.openDraft', (item) => item && item.draft && openDraft(item.draft)),
-    vscode.commands.registerCommand('claudeSwitcher.skills.add', () => add('global')),
-    vscode.commands.registerCommand('claudeSwitcher.skills.addProject', () => add('project')),
-    vscode.commands.registerCommand('claudeSwitcher.skills.remove', remove),
-    vscode.commands.registerCommand('claudeSwitcher.skills.openConversation', openConversation),
+    app.access.command('claudeSwitcher.skills.analyze', analyze),
+    app.access.command('claudeSwitcher.skills.create', create),
+    app.access.command('claudeSwitcher.skills.ignore', ignore),
+    app.access.command('claudeSwitcher.skills.clearIgnored', clearIgnored),
+    app.access.command('claudeSwitcher.skills.install', install),
+    app.access.command('claudeSwitcher.skills.discard', discard),
+    app.access.command('claudeSwitcher.skills.review', review),
+    app.access.command('claudeSwitcher.skills.openDraft', (item) => item && item.draft && openDraft(item.draft)),
+    app.access.command('claudeSwitcher.skills.add', () => add('global')),
+    app.access.command('claudeSwitcher.skills.addProject', () => add('project')),
+    app.access.command('claudeSwitcher.skills.remove', remove),
+    app.access.command('claudeSwitcher.skills.openConversation', openConversation),
     vscode.window.onDidChangeActiveTextEditor(track),
     vscode.workspace.onDidChangeWorkspaceFolders(track),
   ];

@@ -28,6 +28,8 @@ function createApprovals(app, sidebar) {
   const { paths, log } = app;
   const store = new Approvals(app.switcherDir);
   const enabled = () => !!app.config().get('approvals', true);
+  // On, and the access lets this person see and answer the requests.
+  const active = () => enabled() && app.access.can('aprovacoes');
   // A boolean is from before there were three ways: true opened the page.
   const alertMode = () => {
     const v = app.config().get('approvalsReveal', 'notify');
@@ -142,7 +144,7 @@ function createApprovals(app, sidebar) {
 
   function poll() {
     try {
-      if (!enabled()) {
+      if (!active()) {
         items = [];
       } else {
         if (Date.now() - lastBeat > BEAT_MS) beat();
@@ -248,6 +250,7 @@ function createApprovals(app, sidebar) {
   }
 
   function answer(it, msg) {
+    if (!active()) return;
     if (msg.action === 'always' && !it.suggestions.some((s) => s.i === msg.suggestion)) return;
     if (!it.canAllow) return;
     const message = typeof msg.message === 'string' ? msg.message.slice(0, 2000) : '';
@@ -272,7 +275,7 @@ function createApprovals(app, sidebar) {
   function onMessage(msg) {
     if (!msg || typeof msg !== 'object') return;
     if (msg.type === 'ready') return post();
-    if (msg.type === 'toggle') return toggle();
+    if (msg.type === 'toggle') return app.access.can('configuracao') ? toggle() : app.access.refuse('configuracao');
     const it = typeof msg.id === 'string' && items.find((x) => x.id === msg.id);
     if (!it) return;
     if (msg.type === 'go') go(it);
@@ -300,7 +303,7 @@ function createApprovals(app, sidebar) {
     vscode.window.registerWebviewViewProvider(VIEW, provider),
     vscode.window.onDidChangeWindowState((s) => {
       if (s.focused) focusedAt = Date.now();
-      if (enabled()) beat();
+      if (active()) beat();
     }),
   ];
   syncClaudeHook();

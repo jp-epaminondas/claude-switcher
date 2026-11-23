@@ -64,7 +64,7 @@ function createAutoSwitch(app) {
   }
 
   async function poll() {
-    if (polling || !enabled()) return;
+    if (polling || !enabled() || !app.access.open()) return;
     polling = true;
     try {
       if (Date.now() - lastBeat > HEARTBEAT_MS) {

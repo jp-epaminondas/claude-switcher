@@ -1,7 +1,8 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais, Aprovações or Travas, picked
-// from the panel's "…" menu. Each page brings its rows, its description and its badge; only the
+// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais, Aprovações, Travas or
+// Acesso, picked from the panel's "…" menu. A page the access doesn't allow (canPage) never comes
+// on screen, and its commands go through the access too (command). Each page brings its rows, its description and its badge; only the
 // page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
 // has none. A page can bring its own view instead of rows (Aprovações is a webview): the
 // "when" of each view in package.json shows the tree or that view, by the page on screen.
@@ -10,7 +11,7 @@ const vscode = require('vscode');
 const VIEW = 'claudeSwitcher.accounts';
 const CONTEXT = 'claudeSwitcher.page';
 
-function createSidebar() {
+function createSidebar({ command, canPage }) {
   const changed = new vscode.EventEmitter();
   const pages = new Map();
   let current = null;
@@ -53,7 +54,7 @@ function createSidebar() {
 
   function show(name) {
     const page = pages.get(name);
-    if (!page) return Promise.resolve();
+    if (!page || !canPage(name)) return Promise.resolve();
     const switched = page !== current;
     current = page;
     const set = vscode.commands.executeCommand('setContext', CONTEXT, name);
@@ -96,8 +97,16 @@ function createSidebar() {
 
   // Opens the side bar on a page.
   async function focus(name) {
+    if (!canPage(name)) return;
     await show(name); // the page's view only exists once the context says so
     await vscode.commands.executeCommand(`${pages.get(name)?.viewId || VIEW}.focus`);
+  }
+
+  // After the access changed: a page no longer allowed gives way to the first one that is, and
+  // the panel leaves the Acesso page when the switcher has just opened.
+  function reconcile(opening) {
+    if (current && canPage(current.name) && !(opening && current.name === 'access')) return;
+    show([...pages.values()].find((p) => p.name !== 'access' && canPage(p.name))?.name || 'access');
   }
 
   const disposables = [
@@ -113,10 +122,8 @@ function createSidebar() {
       ['Credentials', 'credentials'],
       ['Approvals', 'approvals'],
       ['Locks', 'locks'],
-    ].flatMap(([cmd, name]) => [
-      vscode.commands.registerCommand(`claudeSwitcher.show${cmd}`, () => focus(name)),
-      vscode.commands.registerCommand(`claudeSwitcher.show${cmd}Current`, () => focus(name)),
-    ]),
+      ['Access', 'access'],
+    ].flatMap(([cmd, name]) => [command(`claudeSwitcher.show${cmd}`, () => focus(name)), command(`claudeSwitcher.show${cmd}Current`, () => focus(name))]),
   ];
 
   return {
@@ -124,6 +131,7 @@ function createSidebar() {
     page,
     show,
     focus,
+    reconcile,
     visible: () => view.visible,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };

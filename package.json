@@ -36,7 +36,7 @@
           "id": "claudeSwitcher.accounts",
           "name": "Contas",
           "icon": "media/switcher.svg",
-          "when": "claudeSwitcher.page != approvals"
+          "when": "claudeSwitcher.page != approvals && claudeSwitcher.page != access"
         },
         {
           "type": "webview",
@@ -44,106 +44,169 @@
           "name": "Aprovações",
           "icon": "media/switcher.svg",
           "when": "claudeSwitcher.page == approvals"
+        },
+        {
+          "type": "webview",
+          "id": "claudeSwitcher.access",
+          "name": "Acesso",
+          "icon": "media/switcher.svg",
+          "when": "claudeSwitcher.page == access"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "claudeSwitcher.accounts",
-        "contents": "Nenhuma conta salva ainda.\n[Adicionar conta](command:claudeSwitcher.addAccount)"
+        "contents": "Nenhuma conta salva ainda.\n[Adicionar conta](command:claudeSwitcher.addAccount)",
+        "when": "claudeSwitcher.aberto"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "claudeSwitcher.showAccounts",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != accounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != accounts && claudeSwitcher.pode.contas.usar",
           "group": "0_pages@1"
         },
         {
           "command": "claudeSwitcher.showAccountsCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == accounts && claudeSwitcher.pode.contas.usar",
           "group": "0_pages@1"
         },
         {
           "command": "claudeSwitcher.showMemories",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != memories && claudeSwitcher.pode.memorias",
           "group": "0_pages@2"
         },
         {
           "command": "claudeSwitcher.showMemoriesCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == memories && claudeSwitcher.pode.memorias",
           "group": "0_pages@2"
         },
         {
           "command": "claudeSwitcher.showSkills",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != skills",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != skills && claudeSwitcher.pode.skills",
           "group": "0_pages@3"
         },
         {
           "command": "claudeSwitcher.showSkillsCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == skills && claudeSwitcher.pode.skills",
           "group": "0_pages@3"
         },
         {
           "command": "claudeSwitcher.showCredentials",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != credentials",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != credentials && claudeSwitcher.pode.credenciais.usar",
           "group": "0_pages@4"
         },
         {
           "command": "claudeSwitcher.showCredentialsCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.pode.credenciais.usar",
           "group": "0_pages@4"
         },
         {
           "command": "claudeSwitcher.showApprovals",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != approvals",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != approvals && claudeSwitcher.pode.aprovacoes",
           "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.showApprovalsCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == approvals && claudeSwitcher.pode.aprovacoes",
           "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.showLocks",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != locks",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != locks && claudeSwitcher.pode.travas",
           "group": "0_pages@6"
         },
         {
           "command": "claudeSwitcher.showLocksCurrent",
-          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == locks",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == locks && claudeSwitcher.pode.travas",
           "group": "0_pages@6"
         },
         {
           "command": "claudeSwitcher.showAccounts",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.contas.usar",
           "group": "0_pages@1"
         },
         {
           "command": "claudeSwitcher.showMemories",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.memorias",
           "group": "0_pages@2"
         },
         {
           "command": "claudeSwitcher.showSkills",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.skills",
           "group": "0_pages@3"
         },
         {
           "command": "claudeSwitcher.showCredentials",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.credenciais.usar",
           "group": "0_pages@4"
         },
         {
           "command": "claudeSwitcher.showApprovalsCurrent",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.aprovacoes",
           "group": "0_pages@5"
         },
         {
           "command": "claudeSwitcher.showLocks",
-          "when": "view == claudeSwitcher.approvals",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.travas",
           "group": "0_pages@6"
+        },
+        {
+          "command": "claudeSwitcher.showAccess",
+          "when": "view == claudeSwitcher.accounts",
+          "group": "0_pages@7"
+        },
+        {
+          "command": "claudeSwitcher.showAccess",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "0_pages@7"
+        },
+        {
+          "command": "claudeSwitcher.showAccounts",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.contas.usar",
+          "group": "0_pages@1"
+        },
+        {
+          "command": "claudeSwitcher.showMemories",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.memorias",
+          "group": "0_pages@2"
+        },
+        {
+          "command": "claudeSwitcher.showSkills",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.skills",
+          "group": "0_pages@3"
+        },
+        {
+          "command": "claudeSwitcher.showCredentials",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.credenciais.usar",
+          "group": "0_pages@4"
+        },
+        {
+          "command": "claudeSwitcher.showApprovals",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.aprovacoes",
+          "group": "0_pages@5"
+        },
+        {
+          "command": "claudeSwitcher.showLocks",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.travas",
+          "group": "0_pages@6"
+        },
+        {
+          "command": "claudeSwitcher.showAccessCurrent",
+          "when": "view == claudeSwitcher.access",
+          "group": "0_pages@7"
+        },
+        {
+          "command": "claudeSwitcher.access.check",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.acesso == grupo",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeSwitcher.access.leave",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.acesso == grupo",
+          "group": "1_access@1"
         },
         {
           "command": "claudeSwitcher.addAccount",
@@ -647,6 +710,142 @@
         {
           "command": "claudeSwitcher.skills.openConversation",
           "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.showAccessCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.menu",
+          "when": "claudeSwitcher.pode.contas.usar"
+        },
+        {
+          "command": "claudeSwitcher.switchNext",
+          "when": "claudeSwitcher.pode.contas.usar"
+        },
+        {
+          "command": "claudeSwitcher.addAccount",
+          "when": "claudeSwitcher.pode.contas.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.refresh",
+          "when": "claudeSwitcher.pode.contas.usar"
+        },
+        {
+          "command": "claudeSwitcher.toggleAutoSwitch",
+          "when": "claudeSwitcher.pode.configuracao"
+        },
+        {
+          "command": "claudeSwitcher.toggleTopicGuard",
+          "when": "claudeSwitcher.pode.configuracao"
+        },
+        {
+          "command": "claudeSwitcher.toggleSameProject",
+          "when": "claudeSwitcher.pode.configuracao"
+        },
+        {
+          "command": "claudeSwitcher.toggleApprovals",
+          "when": "claudeSwitcher.pode.configuracao"
+        },
+        {
+          "command": "claudeSwitcher.approvalsAlert",
+          "when": "claudeSwitcher.pode.aprovacoes"
+        },
+        {
+          "command": "claudeSwitcher.memories.analyze",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.memories.openClaudeMd",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.showAccounts",
+          "when": "claudeSwitcher.pode.contas.usar"
+        },
+        {
+          "command": "claudeSwitcher.showMemories",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.showSkills",
+          "when": "claudeSwitcher.pode.skills"
+        },
+        {
+          "command": "claudeSwitcher.showCredentials",
+          "when": "claudeSwitcher.pode.credenciais.usar"
+        },
+        {
+          "command": "claudeSwitcher.showApprovals",
+          "when": "claudeSwitcher.pode.aprovacoes"
+        },
+        {
+          "command": "claudeSwitcher.showLocks",
+          "when": "claudeSwitcher.pode.travas"
+        },
+        {
+          "command": "claudeSwitcher.cred.create",
+          "when": "claudeSwitcher.pode.credenciais.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.cred.unlock",
+          "when": "claudeSwitcher.pode.credenciais.usar"
+        },
+        {
+          "command": "claudeSwitcher.cred.lock",
+          "when": "claudeSwitcher.pode.credenciais.usar"
+        },
+        {
+          "command": "claudeSwitcher.cred.import",
+          "when": "claudeSwitcher.pode.credenciais.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.cred.addEntry",
+          "when": "claudeSwitcher.pode.credenciais.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.cred.changeMaster",
+          "when": "claudeSwitcher.pode.credenciais.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.cred.lockTime",
+          "when": "claudeSwitcher.pode.credenciais.gerenciar"
+        },
+        {
+          "command": "claudeSwitcher.memories.addInstruction",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.memories.addProjectInstruction",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.memories.split",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.memories.splitAgain",
+          "when": "claudeSwitcher.pode.memorias"
+        },
+        {
+          "command": "claudeSwitcher.skills.analyze",
+          "when": "claudeSwitcher.pode.skills"
+        },
+        {
+          "command": "claudeSwitcher.skills.add",
+          "when": "claudeSwitcher.pode.skills"
+        },
+        {
+          "command": "claudeSwitcher.skills.addProject",
+          "when": "claudeSwitcher.pode.skills"
+        },
+        {
+          "command": "claudeSwitcher.access.check",
+          "when": "claudeSwitcher.acesso == grupo"
+        },
+        {
+          "command": "claudeSwitcher.access.leave",
+          "when": "claudeSwitcher.acesso == grupo"
         }
       ],
       "editor/title": [
@@ -1078,6 +1277,28 @@
         "command": "claudeSwitcher.skills.openConversation",
         "title": "Abrir a conversa",
         "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showAccess",
+        "title": "Acesso",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showAccessCurrent",
+        "title": "✓ Acesso",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.access.check",
+        "title": "Conferir as permissões no grupo agora",
+        "category": "Claude Switcher",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeSwitcher.access.leave",
+        "title": "Sair do grupo",
+        "category": "Claude Switcher",
+        "icon": "$(sign-out)"
       }
     ],
     "configuration": {

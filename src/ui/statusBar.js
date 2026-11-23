@@ -47,7 +47,7 @@ function createStatusBar(app) {
     item.show();
   }
 
-  return { update, showError, dispose: () => item.dispose() };
+  return { update, showError, hide: () => item.hide(), dispose: () => item.dispose() };
 }
 
 function tooltip(data, advice, now, autoSwitch) {

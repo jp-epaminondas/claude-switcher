@@ -31,6 +31,7 @@ function createMenu(app, actions) {
       const now = Date.now();
       const advice = app.advise(data, now);
       const next = advice.next;
+      const manage = app.access.can('contas.gerenciar');
       const items = [
         ...data.accounts.map((a) => {
           const s = accountState(a, data, now);
@@ -39,10 +40,12 @@ function createMenu(app, actions) {
             description: a.email,
             detail: `${flags[flagOf(a, advice)] || ''}${s.situation}  ·  ${usageSummary(a, now)}`,
             account: a,
-            buttons: [
-              { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Renomear', action: 'rename' },
-              { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remover do switcher', action: 'remove' },
-            ],
+            buttons: manage
+              ? [
+                  { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Renomear', action: 'rename' },
+                  { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remover do switcher', action: 'remove' },
+                ]
+              : [],
           };
         }),
         { label: 'Ações', kind: vscode.QuickPickItemKind.Separator },
@@ -52,19 +55,8 @@ function createMenu(app, actions) {
           detail: next ? reason(next, now) : undefined,
           action: 'next',
         },
-        app.autoSwitch && app.autoSwitch.enabled()
-          ? { label: '$(sync) Desligar autoswitcher', description: 'ligado: troca e continua sozinho', action: 'auto' }
-          : { label: '$(sync-ignored) Ligar autoswitcher', description: 'troca e continua sozinho quando a conta esgota', action: 'auto' },
-        app.topicGuard && app.topicGuard.enabled()
-          ? { label: '$(comment-discussion) Desligar aviso de assunto novo', description: 'ligado: sugere conversa nova numa conversa longa', action: 'topic' }
-          : { label: '$(comment) Ligar aviso de assunto novo', description: 'sugere conversa nova quando o assunto muda numa conversa longa', action: 'topic' },
-        app.sameProject && app.sameProject.enabled()
-          ? { label: '$(organization) Desligar conversas no mesmo projeto', description: sameProjectNow(app.sameProject.countHere()), action: 'same' }
-          : { label: '$(person) Ligar conversas no mesmo projeto', description: 'duas conversas no mesmo projeto sabem o que a outra faz', action: 'same' },
-        app.approvals && app.approvals.enabled()
-          ? { label: '$(bell) Desligar aprovações', description: approvalsNow(app.approvals.count()), action: 'approvals' }
-          : { label: '$(bell-slash) Ligar aprovações', description: 'aprove os pedidos de todas as conversas num painel só', action: 'approvals' },
-        { label: '$(add) Adicionar conta…', action: 'add' },
+        ...(app.access.can('configuracao') ? toggles() : []),
+        ...(manage ? [{ label: '$(add) Adicionar conta…', action: 'add' }] : []),
         { label: '$(refresh) Atualizar uso agora', action: 'refresh' },
       ];
       // Keep the highlighted row when the list refreshes underneath the user.
@@ -73,6 +65,22 @@ function createMenu(app, actions) {
       const again = activeKey && items.find((i) => keyOf(i) === activeKey);
       if (again) qp.activeItems = [again];
     };
+
+    // The switches; turning things on and off needs the configuracao permission.
+    const toggles = () => [
+      app.autoSwitch && app.autoSwitch.enabled()
+        ? { label: '$(sync) Desligar autoswitcher', description: 'ligado: troca e continua sozinho', action: 'auto' }
+        : { label: '$(sync-ignored) Ligar autoswitcher', description: 'troca e continua sozinho quando a conta esgota', action: 'auto' },
+      app.topicGuard && app.topicGuard.enabled()
+        ? { label: '$(comment-discussion) Desligar aviso de assunto novo', description: 'ligado: sugere conversa nova numa conversa longa', action: 'topic' }
+        : { label: '$(comment) Ligar aviso de assunto novo', description: 'sugere conversa nova quando o assunto muda numa conversa longa', action: 'topic' },
+      app.sameProject && app.sameProject.enabled()
+        ? { label: '$(organization) Desligar conversas no mesmo projeto', description: sameProjectNow(app.sameProject.countHere()), action: 'same' }
+        : { label: '$(person) Ligar conversas no mesmo projeto', description: 'duas conversas no mesmo projeto sabem o que a outra faz', action: 'same' },
+      app.approvals && app.approvals.enabled()
+        ? { label: '$(bell) Desligar aprovações', description: approvalsNow(app.approvals.count()), action: 'approvals' }
+        : { label: '$(bell-slash) Ligar aprovações', description: 'aprove os pedidos de todas as conversas num painel só', action: 'approvals' },
+    ];
 
     qp.onDidTriggerItemButton(({ item, button }) => {
       qp.hide();

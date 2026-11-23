@@ -70,7 +70,7 @@ function createTopicGuard(app) {
   }
 
   function poll() {
-    if (!enabled()) return;
+    if (!enabled() || !app.access.open()) return;
     try {
       if (Date.now() - lastBeat > HEARTBEAT_MS) {
         queue.heartbeat();
