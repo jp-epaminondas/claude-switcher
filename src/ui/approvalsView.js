@@ -17,12 +17,23 @@ const VIEW = 'claudeSwitcher.approvals';
 const POLL_MS = 400;
 const BEAT_MS = 15 * 1000;
 const ACTIONS = new Set(['allow', 'always', 'deny', 'stop']);
+// How the window the user is in speaks up when a request arrives (claudeSwitcher.approvalsReveal).
+const ALERTS = {
+  notify: { label: '$(bell) Aviso no canto da janela', detail: 'Com os botões Ver e Ir para a conversa. A página não abre sozinha.' },
+  page: { label: '$(layout-sidebar-left) Abrir a página Aprovações', detail: 'No painel, sem tirar o cursor de onde ele está.' },
+  none: { label: '$(circle-slash) Não avisar', detail: 'Só o número na barra de status e no ícone do painel, que aparece em todos os modos.' },
+};
 
 function createApprovals(app, sidebar) {
   const { paths, log } = app;
   const store = new Approvals(app.switcherDir);
   const enabled = () => !!app.config().get('approvals', true);
-  const reveal = () => !!app.config().get('approvalsReveal', true);
+  // A boolean is from before there were three ways: true opened the page.
+  const alertMode = () => {
+    const v = app.config().get('approvalsReveal', 'notify');
+    if (typeof v === 'boolean') return v ? 'page' : 'none';
+    return v in ALERTS ? v : 'notify';
+  };
 
   // Conversations opened in this window from now on carry its id: Claude Code runs in this
   // extension host and its hooks inherit the environment.
@@ -141,7 +152,7 @@ function createApprovals(app, sidebar) {
         items = store.pending().map((r) => itemOf(r, windows));
         const fresh = items.filter((it) => !seen.has(it.id));
         for (const it of fresh) seen.add(it.id);
-        if (fresh.length && reveal() && isCurrent(windows)) show();
+        if (fresh.length && isCurrent(windows)) alert(fresh);
       }
       const sig = JSON.stringify([enabled(), items.map((it) => [it.id, it.where, it.windowName, it.title])]);
       if (sig !== lastSig) {
@@ -184,6 +195,33 @@ function createApprovals(app, sidebar) {
     if (view && view.visible) return;
     if (sidebar.visible()) sidebar.show('approvals');
     else sidebar.focus('approvals').then(() => vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup'));
+  }
+
+  function alert(fresh) {
+    const mode = alertMode();
+    if (mode === 'page') show();
+    else if (mode === 'notify' && !(view && view.visible)) notify(fresh);
+  }
+
+  // A notice in the corner: the panel and the keyboard stay where they are. It hides itself
+  // after a few seconds and stays in the notification list.
+  async function notify(fresh) {
+    const it = fresh[0];
+    const one = fresh.length === 1;
+    const from = it.where === 'other' ? ` (outra janela: ${it.windowName})` : '';
+    const text = one
+      ? `Claude pede permissão: ${it.verb}${it.target ? `: ${it.target}` : ''} · ${it.title || it.project || 'conversa'}${from}`
+      : `${fresh.length} pedidos de permissão do Claude esperando.`;
+    const pick = await vscode.window.showInformationMessage(text, 'Ver', ...(one && it.canGo ? ['Ir para a conversa'] : []));
+    if (pick === 'Ver') sidebar.focus('approvals');
+    else if (pick === 'Ir para a conversa') go(it);
+  }
+
+  async function chooseAlert() {
+    const now = alertMode();
+    const picks = Object.entries(ALERTS).map(([mode, a]) => ({ ...a, mode, description: mode === now ? 'atual' : undefined }));
+    const pick = await vscode.window.showQuickPick(picks, { title: 'Quando chega um pedido de permissão', placeHolder: 'Como a janela em que você está avisa' });
+    if (pick && pick.mode !== now) await app.config().update('approvalsReveal', pick.mode, vscode.ConfigurationTarget.Global);
   }
 
   async function openConversation(session) {
@@ -270,6 +308,7 @@ function createApprovals(app, sidebar) {
 
   return {
     toggle,
+    chooseAlert,
     enabled,
     count: () => items.length,
     onConfigChanged() {

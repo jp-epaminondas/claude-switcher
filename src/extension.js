@@ -94,6 +94,7 @@ function activate(context) {
     vscode.commands.registerCommand('claudeSwitcher.toggleTopicGuard', topicGuard.toggle),
     vscode.commands.registerCommand('claudeSwitcher.toggleSameProject', sameProject.toggle),
     vscode.commands.registerCommand('claudeSwitcher.toggleApprovals', approvals.toggle),
+    vscode.commands.registerCommand('claudeSwitcher.approvalsAlert', approvals.chooseAlert),
     vscode.commands.registerCommand('claudeSwitcher.useAccount', (arg) => actions.withAccount(arg, actions.pickAccount)),
     vscode.commands.registerCommand('claudeSwitcher.renameAccount', (arg) => actions.withAccount(arg, actions.renameAccount)),
     vscode.commands.registerCommand('claudeSwitcher.removeAccount', (arg) => actions.withAccount(arg, actions.removeAccount)),

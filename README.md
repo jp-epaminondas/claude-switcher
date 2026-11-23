@@ -79,7 +79,10 @@ Com várias conversas do Claude Code abertas, em várias abas e janelas, cada pe
   - o que o Claude quer fazer: o comando com a descrição, o arquivo com as linhas que saem e as que entram, a página, a ferramenta do MCP com os parâmetros;
   - o que o Claude disse logo antes, recolhido.
 - **Botões:** **Aprovar**; **Sempre permitir…**, com a regra que o próprio Claude Code sugere, como `Sempre permitir Bash(npm test) neste projeto, só para você`; **Negar**, com um campo opcional para dizer ao Claude o que fazer no lugar; **Parar**, que nega e para o Claude naquela conversa; e **Ir para a conversa**, que traz para a frente a janela e a aba da conversa.
-- **A janela em que você está:** todas as janelas mostram os mesmos pedidos, mas só a que está com o foco (ou a última que esteve, se você estiver em outro programa) abre a página sozinha quando chega um pedido. O cursor fica onde estava. Para não abrir sozinho, desligue `claudeSwitcher.approvalsReveal`.
+- **A janela em que você está:** todas as janelas mostram os mesmos pedidos, mas só a que está com o foco (ou a última que esteve, se você estiver em outro programa) avisa quando chega um pedido. Você escolhe como ela avisa em `claudeSwitcher.approvalsReveal` ou no menu **…** da página, em "Como avisar dos pedidos de permissão…":
+  - **aviso no canto da janela** (padrão), com os botões **Ver** e **Ir para a conversa**. A página não abre sozinha, e o aviso não aparece se a página já estiver aberta;
+  - **abrir a página Aprovações**, sem tirar o cursor de onde ele está;
+  - **não avisar**: fica só o número da barra de status e do ícone do painel.
 - A barra de status mostra `🔔 2 aprovações` enquanto houver pedidos esperando, e o ícone do painel ganha o número mesmo com outra página aberta.
 - **O pedido continua na aba também.** Vale a primeira resposta: respondido na página, o diálogo da aba some; respondido na aba, o cartão some em 1 ou 2 s.
 - Uma pergunta do Claude com opções (`AskUserQuestion`) aparece na página só para avisar, com o botão para ir até a conversa: a resposta precisa ser dada na aba. A aprovação de um plano (`ExitPlanMode`) dá para dar pela página.
@@ -261,7 +264,7 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 | `claudeSwitcher.topicGuardMinContextK` | `150` | O aviso de assunto novo só olha conversas com pelo menos estes milhares de tokens de contexto |
 | `claudeSwitcher.sameProject` | `true` | Conversas no mesmo projeto: cada conversa sabe o que a outra faz e não leva nem apaga as mudanças dela no git |
 | `claudeSwitcher.approvals` | `true` | Aprovações: os pedidos de permissão de todas as conversas, de todas as janelas, num painel só |
-| `claudeSwitcher.approvalsReveal` | `true` | Abre a página Aprovações sozinha, na janela em que você está, quando chega um pedido |
+| `claudeSwitcher.approvalsReveal` | `notify` | Como a janela em que você está avisa de um pedido novo: `notify` (aviso no canto), `page` (abre a página Aprovações) ou `none` (só o número) |
 | `claudeSwitcher.switchAtPercent` | `99` | Com o autoswitcher ligado, troca no fim de uma resposta quando a conta chega a esta % (100 desliga) |
 | `claudeSwitcher.maxWaitMinutes` | `20` | Tempo máximo, em minutos, que você aceita ficar sem poder usar de uma vez; a previsão planeja contas e pausas por ele |
 | `claudeSwitcher.notifyPace` | `true` | Avisos da previsão: pausa, todas as contas para esgotar, contas que não aguentam |

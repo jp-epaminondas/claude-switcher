@@ -186,6 +186,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "claudeSwitcher.approvalsAlert",
+          "when": "view == claudeSwitcher.approvals",
+          "group": "1_approvals@1"
+        },
+        {
           "command": "claudeSwitcher.cred.changeMaster",
           "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == credentials && claudeSwitcher.vaultExists",
           "group": "1_vault@1"
@@ -730,6 +735,12 @@
         "icon": "$(bell)"
       },
       {
+        "command": "claudeSwitcher.approvalsAlert",
+        "title": "Como avisar dos pedidos de permissão…",
+        "category": "Claude Switcher",
+        "icon": "$(bell-dot)"
+      },
+      {
         "command": "claudeSwitcher.memories.analyze",
         "title": "Analisar as memórias de novo",
         "category": "Claude Switcher",
@@ -1105,9 +1116,19 @@
           "description": "Aprovações: os pedidos de permissão de todas as conversas do Claude Code, em todas as janelas, aparecem na página Aprovações do painel do switcher, na janela em que você estiver, com o contexto (de qual janela e conversa vieram, o que foi pedido, o comando ou a mudança) e os botões Aprovar, Sempre permitir, Negar, Parar e Ir para a conversa. O pedido continua na aba da conversa também: vale a primeira resposta. Só vale para as conversas da extensão do Claude Code no VS Code; no terminal nada muda. Instala um hook PermissionRequest em ~/.claude/settings.json (precisa do Node.js) e o remove ao desligar."
         },
         "claudeSwitcher.approvalsReveal": {
-          "type": "boolean",
-          "default": true,
-          "description": "Quando chega um pedido de permissão, abre a página Aprovações na janela em que você está (sem tirar o cursor de onde ele está)."
+          "type": "string",
+          "enum": [
+            "notify",
+            "page",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Mostra um aviso no canto da janela, com os botões Ver e Ir para a conversa. A página não abre sozinha.",
+            "Abre a página Aprovações no painel, sem tirar o cursor de onde ele está.",
+            "Não avisa: só o número na barra de status e no ícone do painel, que aparece em todos os modos."
+          ],
+          "default": "notify",
+          "description": "Como a janela em que você está avisa quando chega um pedido de permissão."
         },
         "claudeSwitcher.switchAtPercent": {
           "type": "number",
