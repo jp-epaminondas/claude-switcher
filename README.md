@@ -118,7 +118,7 @@ Antes de a extensão abrir de fato, a página **Acesso** pergunta como você que
 
 A extensão não conhece os níveis, perfis ou papéis de sistema nenhum. Ela só pergunta quais das permissões dela a pessoa tem, e traduzir o jeito de cada sistema para essa lista é trabalho do sistema. Um sistema sem níveis só faz o login, e quem entra tem tudo. A extensão não tem servidor nem banco de dados próprios: ela guarda a URL de login, o formulário e a última resposta (o token e as permissões, nunca a senha) no armazenamento seguro do VS Code. A escolha vale para todas as janelas.
 
-- **A sessão** vale até o token vencer. Depois disso, a extensão trava e pede o login de novo.
+- **A sessão** vale até o token vencer. Se o login devolver um token de renovação, você entra uma vez só. A extensão renova sozinha antes de vencer, e também ao abrir, se o computador ficou desligado e o token venceu. Ela só pede a senha de novo se o grupo recusar a renovação. Sem token de renovação, a extensão trava quando o token vence e pede o login de novo.
 - **Conferência:** se o login devolver uma URL de permissões, a extensão pergunta de novo a cada 5 minutos, ou quando você clica em **Conferir agora**. Uma mudança lá vale sem login novo, e um 401 trava na hora. Sem internet, ela segue com as últimas permissões até o token vencer.
 - **Para sair do grupo**, use **Sair do grupo** na página Acesso. A extensão volta a perguntar como você quer usar.
 - **Limite:** quem bloqueia é a própria extensão, no computador de cada pessoa. Quem escolhe "Entrar sem login" tem tudo, e quem edita o código instalado ou o `settings.json` do VS Code à mão consegue se liberar. O grupo serve para organizar o acesso de uma equipe, não como proteção contra quem quer burlar.
@@ -151,20 +151,30 @@ POST {url}      os campos do formulário e os campos fixos, em JSON
                         "usuario": { "nome": "Maria", "nivel": "OPERADOR" },
                         "permissoes": ["contas.usar", "aprovacoes"],
                         "expira_em": "2026-11-23T08:00:00Z",  ou "expires_in" em segundos
-                        "permissoes_url": "https://…" }
+                        "permissoes_url": "https://…",
+                        "refresh_token": "…",                 para ficar conectado
+                        "renovar_url": "renovar",
+                        "desconectar_url": "desconectar" }
                 → 401 { "erro": "Usuário ou senha inválidos." }
                 → 429   muitas tentativas
 
 GET  {permissoes_url}   opcional, com Authorization: Bearer <token>
                 → 200 { "permissoes": [ … ] }
                 → 401   a sessão acabou
+
+POST {renovar_url}      com Authorization: Bearer <refresh_token>
+                → 200   um login como o do POST {url}, com um refresh_token novo
+                → 401   a conexão acabou: a extensão pede o login de novo
+
+POST {desconectar_url}  com Authorization: Bearer <refresh_token>, ao sair do grupo
 ```
 
 - `tipo` de um campo é `text`, `email` ou `password`. A extensão aceita até 6 campos.
 - **Sem `permissoes`, a pessoa tem tudo.** Uma lista vazia não dá nada. Uma permissão que a extensão não conhece é ignorada.
 - **A validade:** `expira_em`, `expires_in`, a validade escrita no próprio token (o `exp` de um JWT) ou, sem nada disso, 12 horas.
 - **O erro:** o `erro` aparece para a pessoa como está, então não ponha detalhes técnicos nele. Sem `erro`, aparece *"Não foi possível entrar com esses dados"*, com o `tipo_erro` quando houver.
-- A `permissoes_url` precisa estar no mesmo site do login.
+- **Renovação:** o refresh token vale uma vez. A cada renovação vem um novo, e o antigo deixa de valer. A extensão renova na última metade da vida do token, no máximo nos últimos 30 minutos, e uma janela por vez, para duas janelas não gastarem o mesmo token. Erro de rede ou 5xx não derruba a sessão: ela tenta de novo a cada 30 segundos.
+- `permissoes_url`, `renovar_url` e `desconectar_url` podem ser relativas à URL que respondeu, e precisam estar no mesmo site do login.
 
 **No Rota7**, o login padrão do Gerenciador já serve, com a chave da aplicação na URL:
 
@@ -174,11 +184,12 @@ https://www.rota7solutions.com.br/Gerenciador/api/v1/autenticar?chave_aplicacao=
 
 - O Gerenciador recusa quem não tem acesso à aplicação daquela chave, e quem tem entra com tudo, porque o login ainda não devolve `permissoes`.
 - Os erros vêm com o código do Rota7, como *"Não foi possível entrar com esses dados (código 0103)"*.
+- **Ficar conectado:** é a branch `feat/manter-conectado` do Gerenciador (`docs/manter-conectado.md` lá). Depois de rodar o `docs/sql/manter-conectado.sql` e marcar a aplicação com `PERMITE_MANTER_CONECTADO = 1`, o login passa a devolver o token de renovação, que vale 30 dias e recomeça a cada renovação. A conexão cai quando a pessoa perde o acesso à aplicação, é desativada, troca a senha ou sai do grupo, ou quando um token já usado aparece de novo.
 - Para o acesso depender do nível, o Gerenciador precisa devolver as `permissoes` da aplicação no login, e, para valer sem login novo, uma `permissoes_url`.
 - A chave da aplicação não é segredo: o Gerenciador já a publica em toda página do painel.
 
 **Para testar sem a API de verdade:** `node test/grupoFalso.js` sobe dois logins de teste:
-- **O login padrão de um Gerenciador**, em `http://localhost:7318/Gerenciador/api/v1/autenticar?chave_aplicacao=chave-de-teste`. Os usuários são `comum@exemplo.com` e `semacesso@exemplo.com`, com a senha `teste`.
+- **O login padrão de um Gerenciador, que mantém conectado**, em `http://localhost:7318/Gerenciador/api/v1/autenticar?chave_aplicacao=chave-de-teste`. Os usuários são `comum@exemplo.com` e `semacesso@exemplo.com`, com a senha `teste`.
 - **Um sistema com formulário próprio e permissões**, em `http://localhost:7317/auth/login`. Os usuários são `admin` e `operador`, com a senha `teste` e o código `123456`.
 
 ### Qual conta usar (⭐ e 🔥)

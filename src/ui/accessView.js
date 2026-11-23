@@ -5,11 +5,14 @@
 // every window. The rest of the extension asks here what is allowed (app.access): commands go
 // through command(), pages through canPage(), and what runs on its own checks can() or
 // open(). A group whose API gave a permissions URL is asked again now and then, so a change
-// there applies without a new login; any session ends when its token does.
+// there applies without a new login. A session with a refresh token renews itself before it
+// ends (or on the way back, after the computer was off); one without ends with its token.
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { PERMISSIONS, ALL, PAGES, commandPermission, loginUrl, formInput, parseSession, stateOf, isOpen, allows, AccessError, GroupApi } = require('../core/access');
+const { PERMISSIONS, ALL, PAGES, commandPermission, loginUrl, formInput, parseSession, stateOf, isOpen, allows, renewable, renewDue, AccessError, GroupApi } = require('../core/access');
+const { withDirLock } = require('../core/fsutil');
 
 const VIEW = 'claudeSwitcher.access';
 const KEY = 'claudeSwitcher.acesso';
@@ -177,10 +180,38 @@ function createAccess(app, context) {
     );
     if (choice !== 'Sair do grupo') return;
     log(`acesso: saiu do grupo ${session.nome}`);
+    api.disconnect(session);
     draft = null;
     reason = '';
     await save(null);
     show();
+  }
+
+  // Renews the session with its refresh token, one window at a time: the first one to get the
+  // lock renews and the others, reading the session again inside it, find it renewed already.
+  // A refresh token works once, so two windows renewing with the same one would end it.
+  let renewing = null;
+  const renew = () => (renewing = renewing || renewNow().finally(() => (renewing = null)));
+  async function renewNow() {
+    try {
+      fs.mkdirSync(app.switcherDir, { recursive: true });
+      await withDirLock(path.join(app.switcherDir, 'acesso.lock'), async () => {
+        await load();
+        const s = session;
+        if (!renewable(s) || !(state() === 'login' || renewDue(s))) return;
+        try {
+          const r = await api.renew(s);
+          await save({ ...groupPart(s), ...r });
+          log(`acesso: sessão no grupo ${s.nome} renovada até ${clock(r.expiraEm)}`);
+        } catch (e) {
+          if (e.kind === 'sessao') await lose(s, 'A sua conexão com o grupo terminou. Entre de novo.');
+          else log(`acesso: não consegui renovar a sessão no grupo ${s.nome} (${e.message}); tento de novo daqui a pouco`);
+        }
+      }, { staleMs: 30 * 1000, timeoutMs: 25 * 1000 });
+    } catch (e) {
+      log(`acesso: renovação: ${e.message}`);
+    }
+    apply();
   }
 
   // Asks the group's permissions URL what this person may use now. A session that ended
@@ -203,14 +234,16 @@ function createAccess(app, context) {
         log(`acesso: não consegui conferir as permissões no grupo ${s.nome} (${e.message}); sigo com as últimas até ${clock(s.expiraEm)}`);
         return post();
       }
+      // The token was refused; the refresh token may still give a new one.
+      if (renewable(s)) return renew();
       lose(s, 'A sua sessão no grupo terminou. Entre de novo.');
     }
   }
 
-  function lose(s, why) {
+  async function lose(s, why) {
     reason = why;
     log(`acesso: sessão no grupo ${s.nome} terminou`);
-    save(groupPart(s));
+    await save(groupPart(s));
     vscode.window.showWarningMessage(`Claude Switcher: a sua sessão no grupo ${s.nome} terminou. Entre de novo para continuar.`, 'Entrar').then((c) => c && show());
   }
 
@@ -222,7 +255,10 @@ function createAccess(app, context) {
     if (draft && draft.step === 'url') return { screen: 'url' };
     if (draft) return loginScreen(draft.group, { back: 'voltar' });
     const st = state();
-    if (st === 'login') return loginScreen(session, { reason: reason || 'A sua sessão no grupo venceu. Entre de novo.', back: 'sair' });
+    if (st === 'login') {
+      const waiting = renewable(session) ? 'Sem resposta do grupo para renovar a sessão: tento de novo sozinho. Se preferir, entre de novo.' : '';
+      return loginScreen(session, { reason: reason || waiting || 'A sua sessão no grupo venceu. Entre de novo.', back: 'sair' });
+    }
     if (st !== 'grupo') return { screen: st };
     return {
       screen: 'grupo',
@@ -231,6 +267,7 @@ function createAccess(app, context) {
       usuario: session.usuario,
       nivel: session.nivel,
       until: clock(session.expiraEm),
+      keep: renewable(session),
       checkable: !!session.permissoesUrl,
       checked: session.permissoesUrl && checkedAt ? clock(checkedAt) : '',
       permissions: Object.entries(PERMISSIONS).map(([id, label]) => ({ label: label[0].toUpperCase() + label.slice(1), on: can(id) })),
@@ -279,9 +316,11 @@ function createAccess(app, context) {
     },
   };
 
-  // Every half minute: a session past its end locks, and the group is asked again when due.
+  // Every half minute: a session renews before it ends (one with no refresh token locks at its
+  // end), and the group is asked again when due.
   const timer = setInterval(() => {
-    if (state() === 'login' && session.token) lose(session, 'A sua sessão no grupo venceu. Entre de novo.');
+    if (renewDue(session)) renew();
+    else if (state() === 'login' && session.token) lose(session, 'A sua sessão no grupo venceu. Entre de novo.');
     else check();
   }, TICK_MS);
 
@@ -314,6 +353,8 @@ function createAccess(app, context) {
     },
     async start() {
       await load();
+      // Back after the session ended (the computer was off): renewed before anything shows.
+      if (renewDue(session)) await renew();
       apply();
       check(true);
     },

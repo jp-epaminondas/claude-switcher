@@ -37,21 +37,56 @@ function serve(port, handle) {
 }
 
 // The Rota7 Gerenciador's /api/v1/autenticar. Users: comum@exemplo.com (has access to the
-// application) and semacesso@exemplo.com (doesn't), password "teste".
-async function startFakeGerenciador({ port = 0, chave = 'chave-de-teste', ttl } = {}) {
+// application) and semacesso@exemplo.com (doesn't), password "teste". With manterConectado, the
+// application keeps people logged in like the Gerenciador's docs/manter-conectado.md: the login
+// also gives a refresh token, renovar trades it for a new login (the old one stops working, and
+// using it again drops the whole connection), desconectar ends the connection.
+async function startFakeGerenciador({ port = 0, chave = 'chave-de-teste', ttl, manterConectado = false } = {}) {
   const people = { 'comum@exemplo.com': { id: 1, nome: 'Comum', acesso: true }, 'semacesso@exemplo.com': { id: 2, nome: 'Sem acesso', acesso: false } };
+  const refresh = new Map(); // token → { email, conexao, used }
+  const dropped = new Set(); // connections
+  const login = (email, conexao) => {
+    const p = people[email];
+    const acessos = [{ ID_APLICACAO: 42, APLICACAO_NOME: 'ai-switcher', APLICACAO_CHAVE: chave, NIVEL_ACESSO: 'COMUM', DESCRICAO_ACESSO: 'COMUM' }];
+    const usuario = { id: p.id, nome: p.nome, email, acessos };
+    const out = { status: 'ok', token: jwt(usuario, ttl), usuario };
+    if (!manterConectado) return out;
+    const token = crypto.randomBytes(32).toString('hex');
+    refresh.set(token, { email, conexao, used: false });
+    return { ...out, refresh_token: token, renovar_url: 'renovar', desconectar_url: 'desconectar' };
+  };
   const { server, calls, origin } = await serve(port, (req, body, send) => {
+    const bearer = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    const over = () => send(401, { status: 'erro', mensagem: 'Conexao encerrada. Entre de novo.' });
+    if (req.method === 'POST' && req.url === '/Gerenciador/api/v1/renovar') {
+      const t = refresh.get(bearer);
+      if (!t || dropped.has(t.conexao)) return over();
+      if (t.used) {
+        dropped.add(t.conexao);
+        return over();
+      }
+      t.used = true;
+      return send(200, login(t.email, t.conexao));
+    }
+    if (req.method === 'POST' && req.url === '/Gerenciador/api/v1/desconectar') {
+      const t = refresh.get(bearer);
+      if (t) dropped.add(t.conexao);
+      return send(200, { status: 'ok' });
+    }
     if (!req.url.startsWith('/Gerenciador/api/v1/autenticar')) return send(404, '<html>404</html>', 'text/html');
     if (req.method !== 'POST') return send(404, '<html>Pagina nao encontrada</html>', 'text/html');
     if (!body.email || !body.senha || !body.chave_aplicacao) return send(400, { status: 'erro', tipo_erro: '0101', mensagem: 'Credenciais invalidas.' });
     const p = people[body.email];
     if (!p || body.senha !== 'teste' || body.chave_aplicacao !== chave) return send(200, { status: 'erro', tipo_erro: '0101', mensagem: 'Credenciais invalidas.' });
     if (!p.acesso) return send(200, { status: 'erro', tipo_erro: '0103', mensagem: 'Credenciais invalidas.' });
-    const acessos = [{ ID_APLICACAO: 42, APLICACAO_NOME: 'ai-switcher', APLICACAO_CHAVE: chave, NIVEL_ACESSO: 'COMUM', DESCRICAO_ACESSO: 'COMUM' }];
-    const usuario = { id: p.id, nome: p.nome, email: body.email, acessos };
-    return send(200, { status: 'ok', token: jwt(usuario, ttl), usuario });
+    return send(200, login(body.email, crypto.randomBytes(16).toString('hex')));
   });
-  return { url: `${origin}/Gerenciador/api/v1/autenticar?chave_aplicacao=${chave}`, calls, close: () => new Promise((r) => server.close(r)) };
+  return {
+    url: `${origin}/Gerenciador/api/v1/autenticar?chave_aplicacao=${chave}`,
+    calls,
+    dropAll: () => refresh.forEach((t) => dropped.add(t.conexao)),
+    close: () => new Promise((r) => server.close(r)),
+  };
 }
 
 // A system with its own form and permissions. Users: admin (everything) and operador, password
@@ -86,9 +121,9 @@ async function startFakeGroup({ port = 0, nome = 'Empresa X' } = {}) {
 }
 
 if (require.main === module) {
-  Promise.all([startFakeGerenciador({ port: 7318 }), startFakeGroup({ port: 7317 })]).then(([r7, x]) =>
+  Promise.all([startFakeGerenciador({ port: 7318, manterConectado: true }), startFakeGroup({ port: 7317 })]).then(([r7, x]) =>
     console.log(
-      `Gerenciador de teste (login padrão, sem permissões): ${r7.url}\n  comum@exemplo.com e semacesso@exemplo.com, senha "teste"\n` +
+      `Gerenciador de teste (login padrão, sem permissões, mantém conectado): ${r7.url}\n  comum@exemplo.com e semacesso@exemplo.com, senha "teste"\n` +
         `Sistema com formulário próprio e permissões: ${x.url}\n  usuário admin ou operador, senha "teste", código 123456`,
     ),
   );

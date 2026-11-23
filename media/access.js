@@ -111,7 +111,7 @@
       box.appendChild(el('h2', null, `Grupo ${s.nome}`));
       const who = [s.usuario, s.nivel && `nível ${s.nivel}`].filter(Boolean).join(' · ');
       if (who) box.appendChild(el('p', null, who));
-      const when = [s.host, s.until && `sessão até ${s.until}`].filter(Boolean).join(' · ');
+      const when = [s.host, s.keep ? 'conectado: a sessão se renova sozinha' : s.until && `sessão até ${s.until}`].filter(Boolean).join(' · ');
       box.appendChild(el('p', 'muted', when));
       box.appendChild(el('h3', null, 'O que o seu nível permite'));
       const list = el('ul', 'perms');
@@ -134,7 +134,7 @@
   };
 
   function render(s) {
-    const key = JSON.stringify([s.screen, s.nome, s.host, s.campos, s.reason, s.usuario, s.nivel, s.until, s.checked, s.permissions]);
+    const key = JSON.stringify([s.screen, s.nome, s.host, s.campos, s.reason, s.usuario, s.nivel, s.keep || s.until, s.checked, s.permissions]);
     if (key !== shown && screens[s.screen]) {
       shown = key;
       const built = screens[s.screen](s);

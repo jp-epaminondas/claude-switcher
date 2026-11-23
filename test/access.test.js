@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const pkg = require('../package.json');
-const { PERMISSIONS, ALL, PAGES, commandPermission, loginUrl, groupOf, formInput, parseSession, stateOf, allows, GroupApi } = require('../src/core/access');
+const { PERMISSIONS, ALL, PAGES, commandPermission, loginUrl, groupOf, formInput, parseSession, stateOf, allows, renewable, renewDue, GroupApi } = require('../src/core/access');
 const { startFakeGerenciador, startFakeGroup } = require('./grupoFalso');
 
 test('a URL de login: https, sem usuário na URL, e o que vem depois do ? vai no corpo', () => {
@@ -154,4 +154,45 @@ test('API de login: sem resposta, fora do ar, resposta estranha e redirecionamen
   let init;
   await new GroupApi({ fetch: async (url, i) => ((init = i), answer(200, { token: 'abc' })()) }).enter(group, values);
   assert.equal(init.redirect, 'error');
+});
+
+test('manter conectado: renova com o refresh token, que vale uma vez só, e desconecta', async () => {
+  const r7 = await startFakeGerenciador({ chave: 'chave-x', manterConectado: true });
+  try {
+    const api = new GroupApi();
+    const group = await api.describe(r7.url);
+    const first = await api.enter(group, { email: 'comum@exemplo.com', senha: 'teste' });
+    const base = new URL(r7.url).origin;
+    assert.match(first.refreshToken, /^[a-f0-9]{64}$/);
+    assert.equal(first.renovarUrl, `${base}/Gerenciador/api/v1/renovar`, 'relativa ao login');
+    assert.equal(first.desconectarUrl, `${base}/Gerenciador/api/v1/desconectar`);
+
+    const s1 = parseSession({ modo: 'grupo', url: group.url, nome: group.nome, campos: group.campos, ...first });
+    assert.ok(renewable(s1));
+    assert.equal(renewDue(s1), false, 'token novo: ainda não é hora');
+    assert.ok(renewDue(s1, s1.expiraEm - 60 * 1000), 'no fim da vida: renova');
+    assert.ok(renewDue({ ...s1, expiraEm: Date.now() - 1000 }), 'vencido: renova');
+
+    const second = await api.renew(s1);
+    assert.notEqual(second.token, first.token);
+    assert.notEqual(second.refreshToken, first.refreshToken);
+    const renovar = r7.calls.find((c) => c.url === '/Gerenciador/api/v1/renovar');
+    assert.equal(renovar.auth, `Bearer ${first.refreshToken}`, 'o refresh token vai no header');
+    assert.equal(renovar.body, '', 'e não no corpo');
+
+    // O antigo de novo: a conexão inteira cai, inclusive o token novo.
+    await assert.rejects(api.renew(s1), { kind: 'sessao' });
+    const s2 = { ...s1, ...second };
+    await assert.rejects(api.renew(s2), { kind: 'sessao' });
+
+    const other = await api.enter(group, { email: 'comum@exemplo.com', senha: 'teste' });
+    const s3 = { ...s1, ...other };
+    await api.disconnect(s3);
+    await assert.rejects(api.renew(s3), { kind: 'sessao' });
+
+    assert.equal(parseSession({ modo: 'grupo', url: group.url, token: 'a', refreshToken: 'b', renovarUrl: 'https://outro.com/renovar' }).renovarUrl, null, 'renovação só no site do login');
+    assert.equal(renewable(parseSession({ modo: 'grupo', url: group.url, token: 'a', permissoes: ['*'] })), false, 'sem refresh token: não renova');
+  } finally {
+    await r7.close();
+  }
 });

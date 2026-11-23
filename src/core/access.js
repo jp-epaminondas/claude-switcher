@@ -17,6 +17,12 @@
 //                The session lasts until expira_em, expires_in, the token's own exp, or 12 h.
 //   GET  {permissoes_url}   optional, with the token: { permissoes } now, or 401 once the
 //                session is over; checked every few minutes.
+//   Staying logged in, optional: a login answer with { refresh_token, renovar_url,
+//                desconectar_url? } is renewed before it ends, with POST {renovar_url} and the
+//                refresh token as Authorization: Bearer; the answer is a login like the first,
+//                with a new refresh token. 401 there means log in again. Leaving the group
+//                posts {desconectar_url} the same way. These URLs may be relative to the one
+//                that answered, and must be on the login's own site.
 //
 // A Rota7 Gerenciador works as is: its standard login (/api/v1/autenticar) takes the
 // application's key in the URL, and refuses whoever has no access to that application.
@@ -115,10 +121,12 @@ function groupOf(input, nome, campos) {
   return { url: g.url, endpoint: g.endpoint, fixos: g.fixos, host: g.host, nome: text(nome, 80) || new URL(g.endpoint).hostname.replace(/^www\./, ''), campos: fieldsOf(campos) };
 }
 
-// A URL the API gave for later checks, only on the login's own site.
-function sameSite(input, group) {
+// A URL the API gave for later (permissions, renewal), relative to the one that answered and
+// only on the login's own site.
+function sameSite(input, base, group) {
+  if (typeof input !== 'string' || !input) return null;
   try {
-    const u = new URL(String(input));
+    const u = new URL(input, base);
     return u.origin === new URL(group.endpoint).origin && !u.username && !u.password ? u.href : null;
   } catch {
     return null;
@@ -144,7 +152,8 @@ function formInput(campos, values) {
 // What is kept, one of:
 //   { modo: 'livre' }
 //   { modo: 'grupo', url, nome, campos }       the login is still to be made, or it ended
-//   { modo: 'grupo', url, nome, campos, token, usuario, nivel, permissoes, expiraEm, permissoesUrl }
+//   { modo: 'grupo', url, nome, campos, token, usuario, nivel, permissoes, emitidoEm, expiraEm,
+//     permissoesUrl, refreshToken, renovarUrl, desconectarUrl }
 // Anything else reads as nothing picked yet.
 function parseSession(raw) {
   let s;
@@ -165,9 +174,22 @@ function parseSession(raw) {
     usuario: text(s.usuario, 120),
     nivel: text(s.nivel, 60),
     permissoes: Array.isArray(s.permissoes) ? permissionsOf(s.permissoes) : [],
+    emitidoEm: Number.isFinite(s.emitidoEm) ? s.emitidoEm : null,
     expiraEm: Number.isFinite(s.expiraEm) ? s.expiraEm : Date.now() + SESSION_MS,
-    permissoesUrl: s.permissoesUrl ? sameSite(s.permissoesUrl, group) : null,
+    permissoesUrl: sameSite(s.permissoesUrl, group.endpoint, group),
+    refreshToken: validToken(s.refreshToken) ? s.refreshToken : null,
+    renovarUrl: sameSite(s.renovarUrl, group.endpoint, group),
+    desconectarUrl: sameSite(s.desconectarUrl, group.endpoint, group),
   };
+}
+
+// A session that can renew itself, and whether it is time: in the last half of its life, at
+// most the last 30 minutes, or already over.
+const renewable = (s) => !!(s && s.refreshToken && s.renovarUrl);
+function renewDue(s, now = Date.now()) {
+  if (!renewable(s)) return false;
+  const life = s.emitidoEm ? s.expiraEm - s.emitidoEm : Infinity;
+  return now >= s.expiraEm - Math.min(30 * 60 * 1000, life / 2);
 }
 
 // 'escolher' (nothing picked), 'login' (a group with no valid login), 'livre' or 'grupo'.
@@ -218,6 +240,28 @@ function expiryOf(b, token, now) {
   return jwtExpiry(token) || now + SESSION_MS;
 }
 
+// A login answer (from logging in or renewing), or null when it isn't one. URLs in it are
+// relative to the one that answered.
+function loginOf(r, base, group) {
+  const b = r.json;
+  const token = [b.token, b.access_token].find(validToken);
+  if (r.status >= 300 || !token || b.status === 'erro') return null;
+  const u = b.usuario && typeof b.usuario === 'object' ? b.usuario : {};
+  const now = Date.now();
+  return {
+    token,
+    usuario: text(u.nome, 120),
+    nivel: text(u.nivel, 60),
+    permissoes: Array.isArray(b.permissoes) ? permissionsOf(b.permissoes) : [ALL],
+    emitidoEm: now,
+    expiraEm: expiryOf(b, token, now),
+    permissoesUrl: sameSite(b.permissoes_url, base, group),
+    refreshToken: validToken(b.refresh_token) ? b.refresh_token : null,
+    renovarUrl: sameSite(b.renovar_url, base, group),
+    desconectarUrl: sameSite(b.desconectar_url, base, group),
+  };
+}
+
 // A refused login, in the API's words when it gave them ("erro"), else by its error code: some
 // systems (the Rota7 Gerenciador) keep their text off the screen and send only the code.
 function refusal(b) {
@@ -264,25 +308,31 @@ class GroupApi {
     return groupOf(g.url, said.nome, said.campos);
   }
 
-  // → { token, usuario, nivel, permissoes, expiraEm, permissoesUrl }
+  // → { token, usuario, nivel, permissoes, emitidoEm, expiraEm, permissoesUrl, refreshToken, renovarUrl, desconectarUrl }
   async enter(group, values) {
     const r = await this.call(group.endpoint, { method: 'POST', body: { ...group.fixos, ...values } });
     if (r.status === 429) throw new AccessError('limite', text(r.json && r.json.erro, 300) || 'Muitas tentativas seguidas. Espere um pouco e tente de novo.');
     if (r.status >= 500) throw new AccessError('rede', 'O servidor do grupo está com problema agora. Tente de novo daqui a pouco.');
     if (!r.json) throw notLogin();
-    const b = r.json;
-    const token = [b.token, b.access_token].find(validToken);
-    if (r.status >= 300 || !token || b.status === 'erro') throw new AccessError('login', refusal(b));
-    const u = b.usuario && typeof b.usuario === 'object' ? b.usuario : {};
-    const now = Date.now();
-    return {
-      token,
-      usuario: text(u.nome, 120),
-      nivel: text(u.nivel, 60),
-      permissoes: Array.isArray(b.permissoes) ? permissionsOf(b.permissoes) : [ALL],
-      expiraEm: expiryOf(b, token, now),
-      permissoesUrl: b.permissoes_url ? sameSite(b.permissoes_url, group) : null,
-    };
+    const login = loginOf(r, group.endpoint, group);
+    if (!login) throw new AccessError('login', refusal(r.json));
+    return login;
+  }
+
+  // A login from the refresh token, before (or after) the session ends; the old refresh token
+  // stops working. 'sessao' when the group says no: log in again. 'rede' to try again later.
+  async renew(s) {
+    const r = await this.call(s.renovarUrl, { method: 'POST', token: s.refreshToken });
+    if (r.status === 429 || r.status >= 500) throw new AccessError('rede', 'O servidor do grupo não respondeu agora.');
+    const login = r.json && loginOf(r, s.renovarUrl, s);
+    if (!login) throw new AccessError('sessao', 'A sua conexão com o grupo terminou.');
+    return login;
+  }
+
+  // Leaving the group: its connection stops renewing on the server too. Never fails.
+  async disconnect(s) {
+    if (!s.desconectarUrl || !s.refreshToken) return;
+    await this.call(s.desconectarUrl, { method: 'POST', token: s.refreshToken }).catch(() => {});
   }
 
   // What the session may use now → { permissoes, nivel }. 'sessao' once it is over.
@@ -307,6 +357,8 @@ module.exports = {
   stateOf,
   isOpen,
   allows,
+  renewable,
+  renewDue,
   AccessError,
   GroupApi,
 };
