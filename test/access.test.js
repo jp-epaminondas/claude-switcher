@@ -48,12 +48,14 @@ test('todo comando do package.json pede uma permissão conhecida', () => {
   assert.equal(commandPermission('claudeSwitcher.cred.copy'), 'credenciais.gerenciar');
   assert.equal(commandPermission('claudeSwitcher.toggleApprovals'), 'configuracao');
   assert.equal(commandPermission('claudeSwitcher.approvalsAlert'), 'aprovacoes');
+  assert.equal(commandPermission('claudeSwitcher.settings.edit'), 'configuracao');
+  assert.equal(commandPermission('claudeSwitcher.showSettingsCurrent'), 'configuracao');
   assert.equal(commandPermission('claudeSwitcher.showAccessCurrent'), null);
   assert.equal(commandPermission('claudeSwitcher.algoNovo'), ALL);
 });
 
 test('toda página do painel tem a sua permissão', () => {
-  for (const name of ['accounts', 'memories', 'skills', 'credentials', 'approvals', 'locks']) assert.ok(Object.hasOwn(PERMISSIONS, PAGES[name]), name);
+  for (const name of ['accounts', 'memories', 'skills', 'credentials', 'approvals', 'locks', 'settings']) assert.ok(Object.hasOwn(PERMISSIONS, PAGES[name]), name);
   assert.equal(PAGES.access, null);
 });
 

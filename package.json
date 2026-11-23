@@ -124,6 +124,16 @@
           "group": "0_pages@6"
         },
         {
+          "command": "claudeSwitcher.showSettings",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page != settings && claudeSwitcher.pode.configuracao",
+          "group": "0_pages@7"
+        },
+        {
+          "command": "claudeSwitcher.showSettingsCurrent",
+          "when": "view == claudeSwitcher.accounts && claudeSwitcher.page == settings && claudeSwitcher.pode.configuracao",
+          "group": "0_pages@7"
+        },
+        {
           "command": "claudeSwitcher.showAccounts",
           "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.contas.usar",
           "group": "0_pages@1"
@@ -154,14 +164,19 @@
           "group": "0_pages@6"
         },
         {
-          "command": "claudeSwitcher.showAccess",
-          "when": "view == claudeSwitcher.accounts",
+          "command": "claudeSwitcher.showSettings",
+          "when": "view == claudeSwitcher.approvals && claudeSwitcher.pode.configuracao",
           "group": "0_pages@7"
         },
         {
           "command": "claudeSwitcher.showAccess",
+          "when": "view == claudeSwitcher.accounts",
+          "group": "0_pages@8"
+        },
+        {
+          "command": "claudeSwitcher.showAccess",
           "when": "view == claudeSwitcher.approvals",
-          "group": "0_pages@7"
+          "group": "0_pages@8"
         },
         {
           "command": "claudeSwitcher.showAccounts",
@@ -194,9 +209,14 @@
           "group": "0_pages@6"
         },
         {
+          "command": "claudeSwitcher.showSettings",
+          "when": "view == claudeSwitcher.access && claudeSwitcher.pode.configuracao",
+          "group": "0_pages@7"
+        },
+        {
           "command": "claudeSwitcher.showAccessCurrent",
           "when": "view == claudeSwitcher.access",
-          "group": "0_pages@7"
+          "group": "0_pages@8"
         },
         {
           "command": "claudeSwitcher.access.leave",
@@ -779,6 +799,18 @@
           "when": "claudeSwitcher.pode.travas"
         },
         {
+          "command": "claudeSwitcher.showSettings",
+          "when": "claudeSwitcher.pode.configuracao"
+        },
+        {
+          "command": "claudeSwitcher.showSettingsCurrent",
+          "when": "false"
+        },
+        {
+          "command": "claudeSwitcher.settings.edit",
+          "when": "false"
+        },
+        {
           "command": "claudeSwitcher.cred.create",
           "when": "claudeSwitcher.pode.credenciais.gerenciar"
         },
@@ -1023,6 +1055,21 @@
       {
         "command": "claudeSwitcher.showLocksCurrent",
         "title": "✓ Travas",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showSettings",
+        "title": "Configurações",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.showSettingsCurrent",
+        "title": "✓ Configurações",
+        "category": "Claude Switcher"
+      },
+      {
+        "command": "claudeSwitcher.settings.edit",
+        "title": "Mudar a configuração",
         "category": "Claude Switcher"
       },
       {

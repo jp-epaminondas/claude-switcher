@@ -25,6 +25,7 @@ const { createMemoriesView } = require('./ui/memoriesView');
 const { createSkillsView } = require('./ui/skillsView');
 const { createCredentialsView } = require('./ui/credentialsView');
 const { createLocksView } = require('./ui/locksView');
+const { createSettingsView } = require('./ui/settingsView');
 const { createAccess } = require('./ui/accessView');
 
 const MINUTE = 60 * 1000;
@@ -91,6 +92,7 @@ async function activate(context) {
     const skillsView = createSkillsView(app, sidebar);
     const credentialsView = createCredentialsView(app, sidebar);
     const locksView = createLocksView(app, sidebar);
+    const settingsView = createSettingsView(app, sidebar);
 
     const command = access.command;
     context.subscriptions.push(
@@ -103,6 +105,7 @@ async function activate(context) {
       skillsView,
       credentialsView,
       locksView,
+      settingsView,
       command('claudeSwitcher.menu', menu.show),
       command('claudeSwitcher.switchNext', actions.switchNext),
       command('claudeSwitcher.addAccount', actions.addAccount),
@@ -213,6 +216,7 @@ async function activate(context) {
       onAccess() {
         render();
         credentialsView.onAccess();
+        settingsView.onAccess();
         tick();
       },
     };

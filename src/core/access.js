@@ -37,12 +37,21 @@ const PERMISSIONS = {
   'credenciais.gerenciar': 'criar, editar, ver e apagar credenciais, e trocar a senha mestra',
   aprovacoes: 'abrir a página Aprovações e responder os pedidos',
   travas: 'abrir a página Travas (deploy e leitura de produção no modo automático)',
-  configuracao: 'ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações',
+  configuracao: 'abrir a página Configurações e ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações',
 };
 const ALL = '*';
 
 // The permission each side bar page needs. The access page is always there.
-const PAGES = { accounts: 'contas.usar', memories: 'memorias', skills: 'skills', credentials: 'credenciais.usar', approvals: 'aprovacoes', locks: 'travas', access: null };
+const PAGES = {
+  accounts: 'contas.usar',
+  memories: 'memorias',
+  skills: 'skills',
+  credentials: 'credenciais.usar',
+  approvals: 'aprovacoes',
+  locks: 'travas',
+  settings: 'configuracao',
+  access: null,
+};
 
 // The permission each command needs: the first rule that matches; null is always allowed.
 const COMMANDS = [
@@ -55,7 +64,7 @@ const COMMANDS = [
   [/^claudeSwitcher\.showLocks/, 'travas'],
   [/^claudeSwitcher\.(addAccount|renameAccount|removeAccount)$/, 'contas.gerenciar'],
   [/^claudeSwitcher\.(showAccounts|menu$|switchNext$|refresh$|useAccount$)/, 'contas.usar'],
-  [/^claudeSwitcher\.toggle/, 'configuracao'],
+  [/^claudeSwitcher\.(toggle|settings\.|showSettings)/, 'configuracao'],
 ];
 // A command left out of the rules needs every permission, so a new one is never open by mistake.
 function commandPermission(id) {

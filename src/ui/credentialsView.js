@@ -14,6 +14,7 @@ const { SecretHost } = require('../core/secretBus');
 const { parseServerMd } = require('../core/serverMd');
 const { copyIfChanged } = require('../core/claudeHook');
 const { fmtClock } = require('../core/usage');
+const { fmtMinutes } = require('../core/settings');
 
 const { Collapsed, None } = vscode.TreeItemCollapsibleState;
 const SCRIPT = 'segredo.js';
@@ -27,8 +28,6 @@ const LOCK_CHOICES = [5, 15, 30, 60, 120, 240, 480, 720];
 const icon = (id, color) => new vscode.ThemeIcon(id, color ? new vscode.ThemeColor(color) : undefined);
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-// 90 -> "1 h 30 min"
-const fmtMinutes = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
 
 // What a non-secret field holds, by its name.
 const FIELD_ICONS = [

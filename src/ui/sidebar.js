@@ -1,7 +1,7 @@
 'use strict';
 
-// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais, Aprovações, Travas or
-// Acesso, picked from the panel's "…" menu. A page the access doesn't allow (canPage) never comes
+// The side bar panel, one page at a time: Contas, Memórias, Skills, Credenciais, Aprovações, Travas,
+// Configurações or Acesso, picked from the panel's "…" menu. A page the access doesn't allow (canPage) never comes
 // on screen, and its commands go through the access too (command). Each page brings its rows, its description and its badge; only the
 // page on screen shows them, except a badgeAlways page's badge, shown while the page on screen
 // has none. A page can bring its own view instead of rows (Aprovações is a webview): the
@@ -122,6 +122,7 @@ function createSidebar({ command, canPage }) {
       ['Credentials', 'credentials'],
       ['Approvals', 'approvals'],
       ['Locks', 'locks'],
+      ['Settings', 'settings'],
       ['Access', 'access'],
     ].flatMap(([cmd, name]) => [command(`claudeSwitcher.show${cmd}`, () => focus(name)), command(`claudeSwitcher.show${cmd}Current`, () => focus(name))]),
   ];

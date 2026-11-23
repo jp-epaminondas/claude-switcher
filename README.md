@@ -10,7 +10,7 @@ Extensão do VS Code para trocar a conta do Claude Code com um clique quando a a
 - Cada conta aparece com o uso das 5h e da semana. Uma conta esgotada mostra quando volta, por exemplo `esgotada · volta 15:30 (em 2h10)`.
 - O ícone de cada conta indica o estado: 🟢 em uso, 🔴 esgotada, 🟡 precisa de login, ⚪ disponível.
 - **Clique numa conta para passar a usá-la.** Ao passar o mouse aparecem os botões de renomear e remover.
-- O painel tem sete páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais**, **Aprovações**, **Travas** e **Acesso**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas. Num grupo, só aparecem as páginas que o seu nível permite.
+- O painel tem oito páginas, uma de cada vez: **Contas**, **Memórias**, **Skills**, **Credenciais**, **Aprovações**, **Travas**, **Configurações** e **Acesso**. Para trocar, abra o menu **…** no título do painel e escolha a página; a atual aparece com ✓. Ele sempre abre em Contas. Num grupo, só aparecem as páginas que o seu nível permite.
 - No título da página Contas ficam também ＋ adicionar conta e ⟳ atualizar o uso. Trocar para a próxima disponível fica no menu da barra de status e no Ctrl+Shift+P.
 - O ícone da barra lateral ganha um número quando há contas esgotadas.
 
@@ -135,7 +135,7 @@ A extensão não conhece os níveis, perfis ou papéis de sistema nenhum. Ela s�
 | `credenciais.gerenciar` | criar, editar, ver, copiar e apagar credenciais, importar e trocar a senha mestra |
 | `aprovacoes` | a página Aprovações e responder os pedidos |
 | `travas` | a página Travas |
-| `configuracao` | ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações |
+| `configuracao` | abrir a página Configurações e ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações |
 
 **O contrato com o login do grupo.** Só o token é obrigatório. A URL é `https://` (`http://` só em `localhost`, para testes), e a extensão não segue redirecionamentos. O que vem depois do `?` são campos fixos do login, como a chave de uma aplicação: a extensão tira da URL e manda no corpo.
 
@@ -341,6 +341,8 @@ node ~/.claude-switcher/segredo.js exec --env MYSQL_PWD=phpmyadmin.senha -- mysq
 > Para trocar de conta use sempre o switcher, **nunca o Logout** do Claude Code.
 
 ### Configurações
+
+A página **Configurações** do painel junta todas, separadas por assunto: contas e autoswitcher, avisos, conversas, aprovações, credenciais e skills. O que liga e desliga é uma caixinha de marcar; um número ou uma escolha abre uma lista com os valores mais usados e "Outro valor…". Tudo vai para as configurações globais do VS Code, então vale em todas as janelas e projetos. Se um projeto tiver um valor próprio no `.vscode/settings.json`, ele continua valendo ali, e a linha mostra `neste projeto: …`. Num grupo, a página pede a permissão `configuracao`, e cada assunto só aparece para quem pode usar a página dele (avisos e contas pedem `contas.usar`, credenciais pede `credenciais.gerenciar`). No fim da página há um atalho para o editor de configurações do VS Code, com a lista abaixo.
 
 | Configuração | Padrão | O que faz |
 |---|---|---|
