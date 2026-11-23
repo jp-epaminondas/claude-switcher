@@ -2,7 +2,7 @@
   "name": "claude-switcher",
   "displayName": "Claude Account Switcher",
   "description": "Troca a conta do Claude Code com um clique, avisa quando uma conta esgotada volta, junta no CLAUDE.md as preferências repetidas nos projetos e sugere skills para as tarefas que você pede de novo e de novo.",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
