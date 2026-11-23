@@ -199,11 +199,6 @@
           "group": "0_pages@7"
         },
         {
-          "command": "claudeSwitcher.access.check",
-          "when": "view == claudeSwitcher.access && claudeSwitcher.acesso == grupo",
-          "group": "navigation@1"
-        },
-        {
           "command": "claudeSwitcher.access.leave",
           "when": "view == claudeSwitcher.access && claudeSwitcher.acesso == grupo",
           "group": "1_access@1"
@@ -840,10 +835,6 @@
           "when": "claudeSwitcher.pode.skills"
         },
         {
-          "command": "claudeSwitcher.access.check",
-          "when": "claudeSwitcher.acesso == grupo"
-        },
-        {
           "command": "claudeSwitcher.access.leave",
           "when": "claudeSwitcher.acesso == grupo"
         }
@@ -1287,12 +1278,6 @@
         "command": "claudeSwitcher.showAccessCurrent",
         "title": "✓ Acesso",
         "category": "Claude Switcher"
-      },
-      {
-        "command": "claudeSwitcher.access.check",
-        "title": "Conferir as permissões no grupo agora",
-        "category": "Claude Switcher",
-        "icon": "$(refresh)"
       },
       {
         "command": "claudeSwitcher.access.leave",

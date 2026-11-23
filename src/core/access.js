@@ -1,15 +1,27 @@
 'use strict';
 
 // Acesso: how the switcher is used on this computer, picked before it opens. With no login
-// everything is on. In a group, the group's own API checks the login and says what the
-// person's level may use: nothing about groups lives anywhere else. Here there is only the
-// URL the person pasted and the API's last answer (token, level, permissions), which
-// accessView.js keeps in VS Code's secret storage. The API has three routes under that URL:
-//   GET  {url}             → { nome }
-//   POST {url}/entrar      { email, senha } → { token, expira_em?, usuario: { nome, nivel }, permissoes }
-//   GET  {url}/permissoes  Bearer token     → { nivel, permissoes }, or 401 once the token is over
+// everything is on. In a group, the person pastes the group's login URL, and the extension
+// knows nothing else about that system: not its levels, profiles or roles. It only asks which
+// of its own permissions (PERMISSIONS) the person has; turning the system's way of organizing
+// access into that list is the system's job. The contract, where only the token is required:
+//
+//   GET  {url}   optional: what the login form asks, { nome?, campos?: [{ nome, rotulo?, tipo? }] }
+//                with tipo 'text', 'email' or 'password'. Any other answer (404, a page) means
+//                e-mail and senha.
+//   POST {url}   the form's fields plus what came after the ? (such as an application's key),
+//                as JSON. Logged in when the answer has a token:
+//                { token | access_token, usuario?: { nome, nivel }, permissoes?,
+//                  expira_em? | expires_in?, permissoes_url? }
+//                No permissoes means everything: a system with no levels only logs people in.
+//                The session lasts until expira_em, expires_in, the token's own exp, or 12 h.
+//   GET  {permissoes_url}   optional, with the token: { permissoes } now, or 401 once the
+//                session is over; checked every few minutes.
+//
+// A Rota7 Gerenciador works as is: its standard login (/api/v1/autenticar) takes the
+// application's key in the URL, and refuses whoever has no access to that application.
 
-// What a level can be given, as the refusal reads it ("o seu nível não permite …"). '*' is all.
+// What a system can give, as the refusal reads it ("o seu acesso não permite …"). '*' is all.
 const PERMISSIONS = {
   'contas.usar': 'ver as contas e trocar de conta',
   'contas.gerenciar': 'adicionar, renomear e remover contas',
@@ -47,34 +59,92 @@ function commandPermission(id) {
 
 const TIMEOUT_MS = 10 * 1000;
 const MAX_BODY = 64 * 1024;
+const SESSION_MS = 12 * 3600 * 1000;
 const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 const text = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max) : '');
 const isPermission = (p) => typeof p === 'string' && (p === ALL || Object.hasOwn(PERMISSIONS, p));
 const permissionsOf = (list) => [...new Set(list.filter(isPermission))].sort();
 const validToken = (t) => typeof t === 'string' && t.length <= 16384 && /^[\x21-\x7e]+$/.test(t);
+const FIELD_NAME = /^[A-Za-z_][\w.-]{0,59}$/;
 
-// The group's URL as pasted: https (plain http only on this computer, for tests), with no
-// login or query in it. { url } with no trailing slash, or { error } to show.
-function groupUrl(input) {
+// --- the login URL and its form ------------------------------------------------------------
+
+// The login URL as pasted: https (plain http only on this computer, for tests), with no login
+// in it. What comes after the ? are fields the login always takes; they go in the body.
+// → { url, endpoint, fixos, host } or { error } to show.
+function loginUrl(input) {
   let u;
   try {
     u = new URL(String(input || '').trim());
   } catch {
-    return { error: 'Isso não é uma URL. Cole a URL que a sua organização passou, começando com https://.' };
+    return { error: 'Isso não é uma URL. Cole a URL de login que a sua organização passou, começando com https://.' };
   }
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOCAL.has(u.hostname))) return { error: 'A URL do grupo precisa começar com https://.' };
-  if (u.username || u.password) return { error: 'A URL do grupo não pode ter usuário nem senha.' };
-  if (u.search) return { error: 'A URL do grupo não pode ter parâmetros (o que vem depois do ?).' };
-  return { url: `${u.origin}${u.pathname.replace(/\/+$/, '')}` };
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOCAL.has(u.hostname))) return { error: 'A URL de login precisa começar com https://.' };
+  if (u.username || u.password) return { error: 'A URL de login não pode ter usuário nem senha.' };
+  const fixos = {};
+  for (const [k, v] of [...u.searchParams].slice(0, 20)) {
+    if (!FIELD_NAME.test(k) || v.length > 1000) return { error: `A URL de login tem um parâmetro que não dá para usar: ${k.slice(0, 40)}.` };
+    fixos[k] = v;
+  }
+  const endpoint = `${u.origin}${u.pathname}`;
+  const query = new URLSearchParams(fixos).toString();
+  return { url: query ? `${endpoint}?${query}` : endpoint, endpoint, fixos, host: u.host };
+}
+
+const DEFAULT_FIELDS = [
+  { nome: 'email', rotulo: 'E-mail', tipo: 'email' },
+  { nome: 'senha', rotulo: 'Senha', tipo: 'password' },
+];
+const FIELD_TYPES = new Set(['text', 'email', 'password']);
+
+// The fields the API asked for, or e-mail and senha.
+function fieldsOf(list) {
+  const out = [];
+  for (const f of Array.isArray(list) ? list.slice(0, 6) : []) {
+    if (!f || !FIELD_NAME.test(f.nome) || out.some((o) => o.nome === f.nome)) continue;
+    out.push({ nome: f.nome, rotulo: text(f.rotulo, 60) || f.nome, tipo: FIELD_TYPES.has(f.tipo) ? f.tipo : 'text' });
+  }
+  return out.length ? out : DEFAULT_FIELDS.map((f) => ({ ...f }));
+}
+
+// A group: the login URL with its name and its form. null when the URL can't be used.
+function groupOf(input, nome, campos) {
+  const g = loginUrl(input);
+  if (g.error) return null;
+  return { url: g.url, endpoint: g.endpoint, fixos: g.fixos, host: g.host, nome: text(nome, 80) || new URL(g.endpoint).hostname.replace(/^www\./, ''), campos: fieldsOf(campos) };
+}
+
+// A URL the API gave for later checks, only on the login's own site.
+function sameSite(input, group) {
+  try {
+    const u = new URL(String(input));
+    return u.origin === new URL(group.endpoint).origin && !u.username && !u.password ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// What the person typed, checked against the form → { values } or { error }.
+function formInput(campos, values) {
+  const v = values && typeof values === 'object' ? values : {};
+  const out = {};
+  for (const f of campos) {
+    const raw = typeof v[f.nome] === 'string' ? v[f.nome] : '';
+    const val = f.tipo === 'password' ? raw : text(raw, 1024);
+    if (!val || val.length > 1024) return { error: `Preencha: ${f.rotulo}.` };
+    if (f.tipo === 'email' && !/^[^\s@]+@[^\s@]+$/.test(val)) return { error: `${f.rotulo}: digite um e-mail.` };
+    out[f.nome] = val;
+  }
+  return { values: out };
 }
 
 // --- the session ---------------------------------------------------------------------------
 
 // What is kept, one of:
 //   { modo: 'livre' }
-//   { modo: 'grupo', url, nome }     the login is still to be made, or it ended
-//   { modo: 'grupo', url, nome, token, usuario, nivel, permissoes, expiraEm }
+//   { modo: 'grupo', url, nome, campos }       the login is still to be made, or it ended
+//   { modo: 'grupo', url, nome, campos, token, usuario, nivel, permissoes, expiraEm, permissoesUrl }
 // Anything else reads as nothing picked yet.
 function parseSession(raw) {
   let s;
@@ -85,9 +155,9 @@ function parseSession(raw) {
   }
   if (!s || typeof s !== 'object') return null;
   if (s.modo === 'livre') return { modo: 'livre' };
-  const g = s.modo === 'grupo' ? groupUrl(s.url) : {};
-  if (!g.url) return null;
-  const base = { modo: 'grupo', url: g.url, nome: text(s.nome, 80) || new URL(g.url).host };
+  const group = s.modo === 'grupo' ? groupOf(s.url, s.nome, s.campos) : null;
+  if (!group) return null;
+  const base = { modo: 'grupo', ...group };
   if (!validToken(s.token)) return base;
   return {
     ...base,
@@ -95,7 +165,8 @@ function parseSession(raw) {
     usuario: text(s.usuario, 120),
     nivel: text(s.nivel, 60),
     permissoes: Array.isArray(s.permissoes) ? permissionsOf(s.permissoes) : [],
-    expiraEm: Number.isFinite(s.expiraEm) ? s.expiraEm : null,
+    expiraEm: Number.isFinite(s.expiraEm) ? s.expiraEm : Date.now() + SESSION_MS,
+    permissoesUrl: s.permissoesUrl ? sameSite(s.permissoesUrl, group) : null,
   };
 }
 
@@ -103,7 +174,7 @@ function parseSession(raw) {
 function stateOf(s, now = Date.now()) {
   if (!s) return 'escolher';
   if (s.modo === 'livre') return 'livre';
-  return s.token && !(s.expiraEm && s.expiraEm <= now) ? 'grupo' : 'login';
+  return s.token && s.expiraEm > now ? 'grupo' : 'login';
 }
 
 const isOpen = (s, now) => ['livre', 'grupo'].includes(stateOf(s, now));
@@ -119,8 +190,8 @@ function allows(s, perm, now = Date.now()) {
 
 // --- the group's API -----------------------------------------------------------------------
 
-// kind: 'rede' (no answer, or the API is down), 'login' (wrong e-mail or password), 'sessao'
-// (the token is over), 'limite' (too many tries) or 'resposta' (not what a group API answers).
+// kind: 'rede' (no answer, or the server is down), 'login' (the login wasn't accepted),
+// 'sessao' (the session is over), 'limite' (too many tries) or 'resposta' (not a login's answer).
 class AccessError extends Error {
   constructor(kind, message) {
     super(message);
@@ -128,21 +199,32 @@ class AccessError extends Error {
   }
 }
 
-const notGroup = () => new AccessError('resposta', 'A URL respondeu, mas não como a API de um grupo do Claude Switcher. Confira a URL com quem administra o grupo.');
+const notLogin = () => new AccessError('resposta', 'A URL respondeu, mas não como um login. Confira a URL com quem administra o grupo.');
 
-function failure(r, authKind) {
-  const said = text(r.json && r.json.erro, 300);
-  if (r.status === 401 || r.status === 403) return new AccessError(authKind, said || (authKind === 'login' ? 'E-mail ou senha inválidos.' : 'A sessão no grupo terminou.'));
-  if (r.status === 429) return new AccessError('limite', said || 'Muitas tentativas seguidas. Espere um pouco e tente de novo.');
-  if (r.status >= 500) return new AccessError('rede', 'A API do grupo está com problema agora. Tente de novo daqui a pouco.');
-  return new AccessError('resposta', said || `A API do grupo respondeu HTTP ${r.status}.`);
+// When a JWT says it ends, read without checking the signature: only to lock on time.
+function jwtExpiry(token) {
+  try {
+    const exp = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).exp;
+    return Number.isFinite(exp) ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
 }
 
-function parseEntry(body) {
-  if (!body || !validToken(body.token) || !Array.isArray(body.permissoes)) throw notGroup();
-  const u = body.usuario && typeof body.usuario === 'object' ? body.usuario : {};
-  const expira = typeof body.expira_em === 'string' ? Date.parse(body.expira_em) : NaN;
-  return { token: body.token, usuario: text(u.nome, 120), nivel: text(u.nivel, 60), permissoes: permissionsOf(body.permissoes), expiraEm: Number.isFinite(expira) ? expira : null };
+function expiryOf(b, token, now) {
+  const at = typeof b.expira_em === 'string' ? Date.parse(b.expira_em) : NaN;
+  if (Number.isFinite(at)) return at;
+  if (Number.isFinite(b.expires_in) && b.expires_in > 0) return now + b.expires_in * 1000;
+  return jwtExpiry(token) || now + SESSION_MS;
+}
+
+// A refused login, in the API's words when it gave them ("erro"), else by its error code: some
+// systems (the Rota7 Gerenciador) keep their text off the screen and send only the code.
+function refusal(b) {
+  const said = text(b && b.erro, 300);
+  if (said) return said;
+  const code = text(b && b.tipo_erro != null ? String(b.tipo_erro) : '', 20);
+  return `Não foi possível entrar com esses dados${code ? ` (código ${code})` : ''}.`;
 }
 
 class GroupApi {
@@ -151,7 +233,7 @@ class GroupApi {
     this.timeoutMs = timeoutMs;
   }
 
-  // Redirects are refused: the password goes only to the URL the person pasted.
+  // Redirects are refused: what the person types goes only to the URL they pasted.
   async call(url, { method = 'GET', body, token } = {}) {
     const headers = { Accept: 'application/json' };
     if (body) headers['Content-Type'] = 'application/json';
@@ -162,7 +244,7 @@ class GroupApi {
       res = await this.fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs) });
       raw = await res.text();
     } catch {
-      throw new AccessError('rede', 'Não consegui falar com a API do grupo. Confira a URL e a internet.');
+      throw new AccessError('rede', 'Não consegui falar com o servidor do grupo. Confira a URL e a internet.');
     }
     let json = null;
     if (raw.length <= MAX_BODY) {
@@ -170,37 +252,47 @@ class GroupApi {
         json = JSON.parse(raw);
       } catch {}
     }
-    return { status: res.status, json };
+    return { status: res.status, json: json && typeof json === 'object' ? json : null };
   }
 
-  async info(url) {
-    const r = await this.call(url);
-    if (r.status >= 500 || r.status === 429) throw failure(r, 'resposta');
-    const nome = r.status === 200 ? text(r.json && r.json.nome, 80) : '';
-    if (!nome) throw notGroup();
-    return { nome };
+  // The group behind a login URL, with the form its API asks for (or e-mail and senha).
+  async describe(input) {
+    const g = loginUrl(input);
+    if (g.error) throw new AccessError('resposta', g.error);
+    const r = await this.call(g.url);
+    const said = r.status === 200 && r.json ? r.json : {};
+    return groupOf(g.url, said.nome, said.campos);
   }
 
-  async enter(url, email, senha) {
-    const r = await this.call(`${url}/entrar`, { method: 'POST', body: { email, senha } });
-    if (r.status !== 200) throw failure(r, 'login');
-    return parseEntry(r.json);
+  // → { token, usuario, nivel, permissoes, expiraEm, permissoesUrl }
+  async enter(group, values) {
+    const r = await this.call(group.endpoint, { method: 'POST', body: { ...group.fixos, ...values } });
+    if (r.status === 429) throw new AccessError('limite', text(r.json && r.json.erro, 300) || 'Muitas tentativas seguidas. Espere um pouco e tente de novo.');
+    if (r.status >= 500) throw new AccessError('rede', 'O servidor do grupo está com problema agora. Tente de novo daqui a pouco.');
+    if (!r.json) throw notLogin();
+    const b = r.json;
+    const token = [b.token, b.access_token].find(validToken);
+    if (r.status >= 300 || !token || b.status === 'erro') throw new AccessError('login', refusal(b));
+    const u = b.usuario && typeof b.usuario === 'object' ? b.usuario : {};
+    const now = Date.now();
+    return {
+      token,
+      usuario: text(u.nome, 120),
+      nivel: text(u.nivel, 60),
+      permissoes: Array.isArray(b.permissoes) ? permissionsOf(b.permissoes) : [ALL],
+      expiraEm: expiryOf(b, token, now),
+      permissoesUrl: b.permissoes_url ? sameSite(b.permissoes_url, group) : null,
+    };
   }
 
-  async permissions(url, token) {
-    const r = await this.call(`${url}/permissoes`, { token });
-    if (r.status !== 200) throw failure(r, 'sessao');
-    if (!r.json || !Array.isArray(r.json.permissoes)) throw notGroup();
-    return { nivel: text(r.json.nivel, 60), permissoes: permissionsOf(r.json.permissoes) };
+  // What the session may use now → { permissoes, nivel }. 'sessao' once it is over.
+  async check(s) {
+    const r = await this.call(s.permissoesUrl, { token: s.token });
+    if (r.status === 401 || r.status === 403) throw new AccessError('sessao', 'A sessão no grupo terminou.');
+    if (r.status >= 500 || r.status === 429) throw new AccessError('rede', 'O servidor do grupo não respondeu agora.');
+    if (r.status !== 200 || !r.json || !Array.isArray(r.json.permissoes)) throw notLogin();
+    return { permissoes: permissionsOf(r.json.permissoes), nivel: text(r.json.nivel, 60) || s.nivel };
   }
-}
-
-// The login as typed, or { error }.
-function loginInput(email, senha) {
-  const e = text(email, 254);
-  if (!/^[^\s@]+@[^\s@]+$/.test(e)) return { error: 'Digite o seu e-mail.' };
-  if (typeof senha !== 'string' || !senha || senha.length > 1024) return { error: 'Digite a sua senha.' };
-  return { email: e, senha };
 }
 
 module.exports = {
@@ -208,12 +300,13 @@ module.exports = {
   ALL,
   PAGES,
   commandPermission,
-  groupUrl,
+  loginUrl,
+  groupOf,
+  formInput,
   parseSession,
   stateOf,
   isOpen,
   allows,
-  loginInput,
   AccessError,
   GroupApi,
 };

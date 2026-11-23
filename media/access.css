@@ -9,6 +9,7 @@ h2 { margin: 14px 0 8px; font-size: 1.15em; font-weight: 600; overflow-wrap: any
 h3 { margin: 14px 0 6px; font-size: 1em; font-weight: 600; }
 p { margin: 6px 0; overflow-wrap: anywhere; }
 .muted { color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+.dest { padding: 6px 8px; border-left: 3px solid var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background, transparent); overflow-wrap: anywhere; }
 .note { color: var(--vscode-editorWarning-foreground, var(--vscode-foreground)); }
 .error { color: var(--vscode-errorForeground); }
 .hidden { display: none; }

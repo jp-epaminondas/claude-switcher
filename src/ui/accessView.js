@@ -4,12 +4,12 @@
 // or in a group (src/core/access.js). The choice lives in VS Code's secret storage, shared by
 // every window. The rest of the extension asks here what is allowed (app.access): commands go
 // through command(), pages through canPage(), and what runs on its own checks can() or
-// isOpen(). The group's permissions are checked again now and then, so a level changed on the
-// API applies here without a new login.
+// open(). A group whose API gave a permissions URL is asked again now and then, so a change
+// there applies without a new login; any session ends when its token does.
 const crypto = require('crypto');
 const path = require('path');
 const vscode = require('vscode');
-const { PERMISSIONS, ALL, PAGES, commandPermission, groupUrl, parseSession, stateOf, isOpen, allows, loginInput, AccessError, GroupApi } = require('../core/access');
+const { PERMISSIONS, ALL, PAGES, commandPermission, loginUrl, formInput, parseSession, stateOf, isOpen, allows, AccessError, GroupApi } = require('../core/access');
 
 const VIEW = 'claudeSwitcher.access';
 const KEY = 'claudeSwitcher.acesso';
@@ -24,7 +24,7 @@ function createAccess(app, context) {
   let session = null;
   let sidebar = null;
   let view = null;
-  // The steps of a group login, on screen only: { step: 'url' } or { step: 'login', url, nome }.
+  // The steps of a group login, on screen only: { step: 'url' } or { step: 'login', group }.
   let draft = null;
   let busy = false;
   let error = '';
@@ -46,7 +46,7 @@ function createAccess(app, context) {
   // Why something is refused, as one sentence.
   function why(perm) {
     if (!open()) return 'o Claude Switcher está travado até você escolher como usar, sem login ou em um grupo';
-    return `o seu nível no grupo ${session.nome}${session.nivel ? ` (${session.nivel})` : ''} não permite ${PERMISSIONS[perm] || 'esse comando'}`;
+    return `o seu acesso no grupo ${session.nome}${session.nivel ? ` (${session.nivel})` : ''} não permite ${PERMISSIONS[perm] || 'esse comando'}`;
   }
 
   function refuse(perm) {
@@ -89,8 +89,9 @@ function createAccess(app, context) {
     }
   }
 
+  // Kept as given; held here as read back, so it has everything a session has.
   async function save(next) {
-    session = next;
+    session = next ? parseSession(next) : null;
     try {
       if (next) await context.secrets.store(KEY, JSON.stringify(next));
       else await context.secrets.delete(KEY);
@@ -104,6 +105,9 @@ function createAccess(app, context) {
   function show() {
     if (sidebar) sidebar.focus('access');
   }
+
+  // The group part of a session, kept when its login ends.
+  const groupPart = (s) => ({ modo: 'grupo', url: s.url, nome: s.nome, campos: s.campos });
 
   // --- what the page asks for ------------------------------------------------------------
 
@@ -131,36 +135,36 @@ function createAccess(app, context) {
     log('acesso: sem login');
   }
 
+  // The URL is asked what its form wants; a URL that can't be used never goes out.
   function submitUrl(input) {
-    const g = groupUrl(input);
+    const g = loginUrl(input);
     if (g.error) {
       error = g.error;
       return post();
     }
     return working(async () => {
-      const { nome } = await api.info(g.url);
-      draft = { step: 'login', url: g.url, nome };
+      draft = { step: 'login', group: await api.describe(g.url) };
     });
   }
 
   // The group the login screen is for: the one just found, or the one whose login ended.
-  const loginTarget = () => (draft && draft.step === 'login' ? draft : state() === 'login' ? session : null);
+  const loginTarget = () => (draft && draft.step === 'login' ? draft.group : state() === 'login' ? session : null);
 
-  function submitLogin(email, senha) {
-    const target = loginTarget();
-    if (!target) return;
-    const input = loginInput(email, senha);
+  function submitLogin(values) {
+    const group = loginTarget();
+    if (!group) return;
+    const input = formInput(group.campos, values);
     if (input.error) {
       error = input.error;
       return post();
     }
     return working(async () => {
-      const r = await api.enter(target.url, input.email, input.senha);
+      const r = await api.enter(group, input.values);
       draft = null;
       reason = '';
       checkedAt = Date.now();
-      await save({ modo: 'grupo', url: target.url, nome: target.nome, ...r });
-      log(`acesso: entrou no grupo ${target.nome} (${target.url}), nível ${r.nivel || 'sem nome'}: ${r.permissoes.join(', ') || 'nenhuma permissão'}`);
+      await save({ ...groupPart(group), ...r });
+      log(`acesso: entrou no grupo ${group.nome} (${group.endpoint})${r.nivel ? `, nível ${r.nivel}` : ''}: ${r.permissoes.join(', ') || 'nenhuma permissão'}`);
     });
   }
 
@@ -179,24 +183,24 @@ function createAccess(app, context) {
     show();
   }
 
-  // Asks the group what this level may use now. A login that ended locks; a network hiccup
-  // keeps the last answer until the token's own end.
+  // Asks the group's permissions URL what this person may use now. A session that ended
+  // locks; a network hiccup keeps the last answer until the session's own end.
   async function check(force = false) {
-    if (state() !== 'grupo' || (!force && Date.now() - checkedAt < CHECK_MS)) return;
+    if (state() !== 'grupo' || !session.permissoesUrl || (!force && Date.now() - checkedAt < CHECK_MS)) return;
     checkedAt = Date.now();
     const s = session;
     try {
-      const r = await api.permissions(s.url, s.token);
+      const r = await api.check(s);
       if (session !== s) return;
-      if (r.permissoes.join() !== s.permissoes.join() || (r.nivel && r.nivel !== s.nivel)) {
-        await save({ ...s, nivel: r.nivel || s.nivel, permissoes: r.permissoes });
-        log(`acesso: nível no grupo ${s.nome} agora ${r.nivel || '?'}: ${r.permissoes.join(', ') || 'nenhuma permissão'}`);
-        vscode.window.showInformationMessage(`Claude Switcher: o seu nível no grupo ${s.nome} mudou${r.nivel ? ` para ${r.nivel}` : ''}.`, 'Ver').then((c) => c && show());
+      if (r.permissoes.join() !== s.permissoes.join() || r.nivel !== s.nivel) {
+        await save({ ...s, ...r });
+        log(`acesso: permissões no grupo ${s.nome} agora: ${r.permissoes.join(', ') || 'nenhuma'}`);
+        vscode.window.showInformationMessage(`Claude Switcher: o seu acesso no grupo ${s.nome} mudou.`, 'Ver').then((c) => c && show());
       } else post();
     } catch (e) {
       if (session !== s) return;
       if (e.kind !== 'sessao') {
-        log(`acesso: não consegui conferir as permissões no grupo ${s.nome} (${e.message}); sigo com as últimas${s.expiraEm ? ` até ${clock(s.expiraEm)}` : ''}`);
+        log(`acesso: não consegui conferir as permissões no grupo ${s.nome} (${e.message}); sigo com as últimas até ${clock(s.expiraEm)}`);
         return post();
       }
       lose(s, 'A sua sessão no grupo terminou. Entre de novo.');
@@ -206,26 +210,29 @@ function createAccess(app, context) {
   function lose(s, why) {
     reason = why;
     log(`acesso: sessão no grupo ${s.nome} terminou`);
-    save({ modo: 'grupo', url: s.url, nome: s.nome });
+    save(groupPart(s));
     vscode.window.showWarningMessage(`Claude Switcher: a sua sessão no grupo ${s.nome} terminou. Entre de novo para continuar.`, 'Entrar').then((c) => c && show());
   }
 
   // --- the page ----------------------------------------------------------------------------
 
+  const loginScreen = (g, extra) => ({ screen: 'login', nome: g.nome, host: g.host, campos: g.campos, ...extra });
+
   function screen() {
     if (draft && draft.step === 'url') return { screen: 'url' };
-    if (draft) return { screen: 'login', nome: draft.nome, host: new URL(draft.url).host, back: 'voltar' };
+    if (draft) return loginScreen(draft.group, { back: 'voltar' });
     const st = state();
-    if (st === 'login') return { screen: 'login', nome: session.nome, host: new URL(session.url).host, reason: reason || (session.expiraEm ? 'A sua sessão no grupo venceu. Entre de novo.' : ''), back: 'sair' };
+    if (st === 'login') return loginScreen(session, { reason: reason || 'A sua sessão no grupo venceu. Entre de novo.', back: 'sair' });
     if (st !== 'grupo') return { screen: st };
     return {
       screen: 'grupo',
       nome: session.nome,
-      host: new URL(session.url).host,
+      host: session.host,
       usuario: session.usuario,
       nivel: session.nivel,
-      until: session.expiraEm ? clock(session.expiraEm) : '',
-      checked: checkedAt ? clock(checkedAt) : '',
+      until: clock(session.expiraEm),
+      checkable: !!session.permissoesUrl,
+      checked: session.permissoesUrl && checkedAt ? clock(checkedAt) : '',
       permissions: Object.entries(PERMISSIONS).map(([id, label]) => ({ label: label[0].toUpperCase() + label.slice(1), on: can(id) })),
     };
   }
@@ -234,7 +241,6 @@ function createAccess(app, context) {
     if (view) view.webview.postMessage({ type: 'state', ...screen(), busy, error });
   }
 
-  const str = (v, max) => (typeof v === 'string' && v.length <= max ? v : '');
   const ACTIONS = {
     ready: () => post(),
     livre: () => chooseFree(),
@@ -243,8 +249,8 @@ function createAccess(app, context) {
       error = '';
       post();
     },
-    url: (msg) => submitUrl(str(msg.url, 2000)),
-    entrar: (msg) => submitLogin(str(msg.email, 254), str(msg.senha, 1024)),
+    url: (msg) => submitUrl(typeof msg.url === 'string' ? msg.url.slice(0, 4000) : ''),
+    entrar: (msg) => submitLogin(msg.valores),
     voltar: () => {
       draft = draft && draft.step === 'login' ? { step: 'url' } : null;
       error = '';
@@ -273,7 +279,7 @@ function createAccess(app, context) {
     },
   };
 
-  // Every minute or so: a token that ran out locks, and the group is asked again when due.
+  // Every half minute: a session past its end locks, and the group is asked again when due.
   const timer = setInterval(() => {
     if (state() === 'login' && session.token) lose(session, 'A sua sessão no grupo venceu. Entre de novo.');
     else check();
@@ -289,7 +295,6 @@ function createAccess(app, context) {
       await load();
       apply();
     }),
-    command('claudeSwitcher.access.check', () => working(() => check(true))),
     command('claudeSwitcher.access.leave', leave),
   ];
 

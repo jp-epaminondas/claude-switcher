@@ -114,16 +114,16 @@ Como funciona:
 Antes de a extensão abrir de fato, a página **Acesso** pergunta como você quer usá-la. Até a escolha, nada roda: nem troca de conta, nem hooks, nem cofre.
 
 - **Entrar sem login:** tudo liberado neste computador, inclusive a configuração. É o jeito de sempre.
-- **Entrar em um grupo:** você cola a URL que a sua organização passou, e a próxima tela pede o e-mail e a senha do grupo. Depois de entrar, só aparece o que o seu nível permite: as páginas que ele não permite somem do menu **…**, e os comandos dizem *"o seu nível no grupo Rota7 (OPERADOR) não permite …"*.
+- **Entrar em um grupo:** você cola a URL de login que a sua organização passou. A próxima tela mostra para onde os seus dados vão e pede o que o login do grupo pede: e-mail e senha, se ele não disser outra coisa. Depois de entrar, só aparece o que o seu acesso permite. As páginas que ele não permite somem do menu **…**, e os comandos dizem *"o seu acesso no grupo Empresa X (OPERADOR) não permite …"*.
 
-Quem cuida dos usuários, dos níveis e do que cada nível pode é a API da organização. A extensão não tem servidor nem banco de dados próprios: ela guarda só a URL do grupo e a última resposta da API (o token, o nível e as permissões, nunca a senha), no armazenamento seguro do VS Code. A escolha vale para todas as janelas.
+A extensão não conhece os níveis, perfis ou papéis de sistema nenhum. Ela só pergunta quais das permissões dela a pessoa tem, e traduzir o jeito de cada sistema para essa lista é trabalho do sistema. Um sistema sem níveis só faz o login, e quem entra tem tudo. A extensão não tem servidor nem banco de dados próprios: ela guarda a URL de login, o formulário e a última resposta (o token e as permissões, nunca a senha) no armazenamento seguro do VS Code. A escolha vale para todas as janelas.
 
-- **A sessão:** a extensão confere as permissões ao abrir e a cada 5 minutos, ou quando você clica em **Conferir agora**. Um nível mudado na API vale aí, sem entrar de novo. Quando a API diz que a sessão acabou (401), ou quando o token vence, a extensão trava e pede o login de novo.
-- **Sem internet:** a extensão segue com as últimas permissões até o token vencer.
+- **A sessão** vale até o token vencer. Depois disso, a extensão trava e pede o login de novo.
+- **Conferência:** se o login devolver uma URL de permissões, a extensão pergunta de novo a cada 5 minutos, ou quando você clica em **Conferir agora**. Uma mudança lá vale sem login novo, e um 401 trava na hora. Sem internet, ela segue com as últimas permissões até o token vencer.
 - **Para sair do grupo**, use **Sair do grupo** na página Acesso. A extensão volta a perguntar como você quer usar.
 - **Limite:** quem bloqueia é a própria extensão, no computador de cada pessoa. Quem escolhe "Entrar sem login" tem tudo, e quem edita o código instalado ou o `settings.json` do VS Code à mão consegue se liberar. O grupo serve para organizar o acesso de uma equipe, não como proteção contra quem quer burlar.
 
-**Permissões que a API pode dar a um nível** (`*` dá todas):
+**Permissões que o login pode devolver** (`*` dá todas):
 
 | Permissão | O que libera |
 |---|---|
@@ -137,28 +137,49 @@ Quem cuida dos usuários, dos níveis e do que cada nível pode é a API da orga
 | `travas` | a página Travas |
 | `configuracao` | ligar e desligar o autoswitcher, o aviso de assunto novo, as conversas no mesmo projeto e as aprovações |
 
-**O que a API do grupo precisa responder.** A URL que a pessoa cola é a base, `https://` (`http://` só em `localhost`, para testes), sem parâmetros. A extensão não segue redirecionamentos, então a senha só vai para essa URL.
+**O contrato com o login do grupo.** Só o token é obrigatório. A URL é `https://` (`http://` só em `localhost`, para testes), e a extensão não segue redirecionamentos. O que vem depois do `?` são campos fixos do login, como a chave de uma aplicação: a extensão tira da URL e manda no corpo.
 
 ```
-GET  {url}               → 200 { "nome": "Rota7" }
+GET  {url}      opcional: o formulário do login
+                → 200 { "nome": "Empresa X",
+                        "campos": [ { "nome": "usuario", "rotulo": "Usuário" },
+                                    { "nome": "password", "rotulo": "Senha", "tipo": "password" } ] }
+                qualquer outra resposta (404, uma página): e-mail e senha
 
-POST {url}/entrar        { "email": "maria@empresa.com", "senha": "…" }
-                         → 200 { "token": "…", "expira_em": "2026-11-23T08:00:00Z",
-                                 "usuario": { "nome": "Maria", "nivel": "OPERADOR" },
-                                 "permissoes": ["contas.usar", "aprovacoes"] }
-                         → 401 { "erro": "E-mail ou senha inválidos." }
-                         → 429 { "erro": "…" }   muitas tentativas
+POST {url}      os campos do formulário e os campos fixos, em JSON
+                → 200 { "token": "…",                       ou "access_token"
+                        "usuario": { "nome": "Maria", "nivel": "OPERADOR" },
+                        "permissoes": ["contas.usar", "aprovacoes"],
+                        "expira_em": "2026-11-23T08:00:00Z",  ou "expires_in" em segundos
+                        "permissoes_url": "https://…" }
+                → 401 { "erro": "Usuário ou senha inválidos." }
+                → 429   muitas tentativas
 
-GET  {url}/permissoes    Authorization: Bearer <token>
-                         → 200 { "nivel": "OPERADOR", "permissoes": [ … ] }
-                         → 401   a sessão acabou: a extensão pede o login de novo
+GET  {permissoes_url}   opcional, com Authorization: Bearer <token>
+                → 200 { "permissoes": [ … ] }
+                → 401   a sessão acabou
 ```
 
-- `expira_em` é opcional, em ISO 8601. Sem ele, o token vale até a API responder 401.
-- Uma permissão que a extensão não conhece é ignorada. Um nível sem permissões entra, mas só vê a página Acesso.
-- O `erro` aparece para a pessoa como está, então não ponha detalhes técnicos nele.
-- **No Gerenciador do Rota7:** `/entrar` reaproveita o login que já existe (`POST /api/v1/autenticar`, com a chave da aplicação "Claude Switcher" guardada na própria API). Os níveis são os da aplicação no cadastro de aplicações (tabela `ACESSO`), e o que cada nível pode fica num arquivo de configuração, como o `config/permissions.php`, sem tabela nova. `/permissoes` lê o nível atual do usuário em `USUARIO_APLICACAO`. Não use `/api/informacoes-usuario` para isso: ela devolve o que estava no token no login.
-- **Para testar sem a API de verdade:** `node test/grupoFalso.js` sobe um grupo de teste em `http://localhost:7317/grupo`, com `admin@exemplo.com` (nível MASTER, tudo) e `operador@exemplo.com` (OPERADOR), as duas com a senha `teste`.
+- `tipo` de um campo é `text`, `email` ou `password`. A extensão aceita até 6 campos.
+- **Sem `permissoes`, a pessoa tem tudo.** Uma lista vazia não dá nada. Uma permissão que a extensão não conhece é ignorada.
+- **A validade:** `expira_em`, `expires_in`, a validade escrita no próprio token (o `exp` de um JWT) ou, sem nada disso, 12 horas.
+- **O erro:** o `erro` aparece para a pessoa como está, então não ponha detalhes técnicos nele. Sem `erro`, aparece *"Não foi possível entrar com esses dados"*, com o `tipo_erro` quando houver.
+- A `permissoes_url` precisa estar no mesmo site do login.
+
+**No Rota7**, o login padrão do Gerenciador já serve, com a chave da aplicação na URL:
+
+```
+https://www.rota7solutions.com.br/Gerenciador/api/v1/autenticar?chave_aplicacao=<APLICACAO.CHAVE>
+```
+
+- O Gerenciador recusa quem não tem acesso à aplicação daquela chave, e quem tem entra com tudo, porque o login ainda não devolve `permissoes`.
+- Os erros vêm com o código do Rota7, como *"Não foi possível entrar com esses dados (código 0103)"*.
+- Para o acesso depender do nível, o Gerenciador precisa devolver as `permissoes` da aplicação no login, e, para valer sem login novo, uma `permissoes_url`.
+- A chave da aplicação não é segredo: o Gerenciador já a publica em toda página do painel.
+
+**Para testar sem a API de verdade:** `node test/grupoFalso.js` sobe dois logins de teste:
+- **O login padrão de um Gerenciador**, em `http://localhost:7318/Gerenciador/api/v1/autenticar?chave_aplicacao=chave-de-teste`. Os usuários são `comum@exemplo.com` e `semacesso@exemplo.com`, com a senha `teste`.
+- **Um sistema com formulário próprio e permissões**, em `http://localhost:7317/auth/login`. Os usuários são `admin` e `operador`, com a senha `teste` e o código `123456`.
 
 ### Qual conta usar (⭐ e 🔥)
 
